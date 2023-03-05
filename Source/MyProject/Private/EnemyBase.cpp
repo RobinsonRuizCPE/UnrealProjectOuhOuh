@@ -4,18 +4,18 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "TimerManager.h"
+
 
 AEnemyBase::AEnemyBase()
 {
     PrimaryActorTick.bCanEverTick = true;
 
-    SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
-    RootComponent = SkeletalMeshComponent;
+    auto mesh_comp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
+    RootComponent = mesh_comp;
 
-    //GetCapsuleComponent() = CreateDefaultSubobject<UCapsuleComponent()>(TEXT("CapsuleComponent()"));
+    SetActorEnableCollision(true);
     GetCapsuleComponent()->SetupAttachment(RootComponent);
-    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    GetCapsuleComponent()->SetCollisionProfileName(TEXT("Pawn"));
 
     Health = MaxHealth;
 }
@@ -27,6 +27,11 @@ void AEnemyBase::BeginPlay()
     {
         //RunBehaviorTree(BehaviorTree);
     }
+
+    GetMesh()->SetCollisionProfileName(TEXT("Enemy"));
+
+    float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
+    GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AEnemyBase::Attack, TimeBetweenShots, true, FirstDelay);
 }
 
 void AEnemyBase::Tick(float DeltaTime)
@@ -56,19 +61,19 @@ void AEnemyBase::UpdateAI(float DeltaTime)
     FVector TargetLocation = Target->GetActorLocation();
     FVector SelfLocation = GetActorLocation();
     FVector Direction = TargetLocation - SelfLocation;
-    Direction.Z = 0.0f;
+    //Direction.Z = 0.0f;
     Direction.Normalize();
 
     // Move towards the target
     auto CharMovement = GetCharacterMovement();
     if (CharMovement != nullptr)
     {
-        CharMovement->AddInputVector(Direction * MoveSpeed * DeltaTime);
+        //CharMovement->AddInputVector(Direction * MoveSpeed * DeltaTime);
     }
 
     // Rotate towards the target
     FRotator LookAtRotation = FRotationMatrix::MakeFromX(Direction).Rotator();
-    SkeletalMeshComponent->SetWorldRotation(LookAtRotation);
+    RootComponent->SetWorldRotation(LookAtRotation);
 
     // Check if the enemy is in range to attack
     float DistanceToTarget = FVector::Distance(TargetLocation, SelfLocation);
@@ -81,17 +86,23 @@ void AEnemyBase::UpdateAI(float DeltaTime)
 
 void AEnemyBase::Attack()
 {
+    LastFireTime = GetWorld()->TimeSeconds;
+
     if (ProjectileClass != nullptr)
     {
         // Spawn projectile at the enemy's location
         FVector SpawnLocation = GetActorLocation();
-        FRotator SpawnRotation = SkeletalMeshComponent->GetComponentRotation();
+        FRotator SpawnRotation = RootComponent->GetComponentRotation();
         AProjectileBase* Projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileClass, SpawnLocation, SpawnRotation);
 
         if (Projectile != nullptr)
         {
             // Set the projectile's owner to this enemy
             Projectile->SetOwner(this);
+            Projectile->SetProjectileTrajectory(GetActorForwardVector() * 1000.f);
+            Projectile->SetProjectileCollision(TEXT("EnemyProjectile"));
+            Projectile->SetSpawnLocation(GetActorLocation());
+            Projectile->SetProjectileMaxDistance(10000.f);
         }
     }
 }
@@ -116,7 +127,7 @@ void AEnemyBase::Die()
     bIsDead = true;
 
     // Disable collision
-    SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     // Disable movement
@@ -127,9 +138,10 @@ void AEnemyBase::Die()
     }
 
     // Play death animation and destroy actor after a delay
-    SkeletalMeshComponent->PlayAnimation(DeathAnimation, false);
+    GetMesh()->PlayAnimation(DeathAnimation, false);
     FTimerHandle TimerHandle;
     GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
+    GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
 }
 
 void AEnemyBase::DestroyEnemy()

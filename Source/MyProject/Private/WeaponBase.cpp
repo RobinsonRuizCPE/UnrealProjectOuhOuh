@@ -55,6 +55,8 @@ void AWeaponBase::Fire()
 void AWeaponBase::SpawnProjectile() const {
     auto const projectile_velocity = TargetDirection * 1000.f;
     auto const spawned_projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileType, GetActorLocation(), TargetDirection.ToOrientationRotator());
+    spawned_projectile->SetOwner(GetParentActor());
+    spawned_projectile->SetProjectileCollision(TEXT("CharacterProjectile"));
     spawned_projectile->SetProjectileTrajectory(projectile_velocity);
     spawned_projectile->SetSpawnLocation(GetActorLocation());
     spawned_projectile->SetProjectileMaxDistance(WeaponRange);

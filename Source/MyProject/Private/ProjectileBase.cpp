@@ -7,6 +7,8 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 
+#include "EnemyBase.h"
+
 // Sets default values
 AProjectileBase::AProjectileBase()
 {
@@ -44,11 +46,18 @@ void AProjectileBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActo
     if (HitEffect) {
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), HitEffect, Hit.Location);
     }
+
     if (HitSound) {
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), HitSound, Hit.Location);
     }
 
     Destroy();
+
+    if (OtherActor) {
+        if (OtherActor->GetClass()->IsChildOf(AEnemyBase::StaticClass())) {
+            Cast<AEnemyBase>(OtherActor)->TakeDamageImpl(ProjectileDamage);
+        }
+    }
 }
 
 // Called every frame
@@ -63,4 +72,8 @@ void AProjectileBase::Tick(float DeltaTime)
 
 float const AProjectileBase::ComputeTraveledDistance() {
     return FVector::Distance(SpawnLocation, GetActorLocation());
+}
+
+void AProjectileBase::SetProjectileCollision(FName const InCollisionProfileName) {
+    ProjectileMesh->SetCollisionProfileName(InCollisionProfileName);
 }

@@ -14,7 +14,7 @@ AVanquishCharacter::AVanquishCharacter()
 void AVanquishCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	GetMesh()->SetCollisionProfileName(TEXT("Character"));
 }
 
 // Called every frame

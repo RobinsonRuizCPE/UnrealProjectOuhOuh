@@ -38,8 +38,8 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
         float MaxHealth = 100.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
-        TSubclassOf<class AProjectileBase> ProjectileClass;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+        TSubclassOf<AProjectileBase> ProjectileClass;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
         UAnimationAsset* DeathAnimation;
@@ -66,9 +66,6 @@ public:
     bool IsDead() const;
 
 protected:
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-        class USkeletalMeshComponent* SkeletalMeshComponent;
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
         float Health;
 
@@ -77,4 +74,9 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
         class ACharacter* Target;
+
+private:
+    float LastFireTime;
+    float TimeBetweenShots = 2.f;
+    FTimerHandle TimerHandle_TimeBetweenShots;
 };
