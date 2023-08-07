@@ -42,6 +42,7 @@ public:
 	void EndDodging();
 
 
+
 	/**
 	Sword Attack Handling
 	*/
@@ -51,6 +52,21 @@ public:
 	void StartSwordAttack(SwordAttackType const attack_to_start);
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	void EndSwordAttack();
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	float const GetCurrentHealtPercentage() const { return (mCurrentHealth/mMaxHealth); };
+
+	void TakeDamageImpl(float Damage);
+
+private:
+	void Die();
+
+protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
+	float mMaxHealth = 100.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	float mCurrentHealth;
 
 private:
 	// Dodge variables

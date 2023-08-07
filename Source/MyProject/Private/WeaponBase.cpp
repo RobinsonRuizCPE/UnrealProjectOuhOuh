@@ -97,7 +97,7 @@ void AWeaponBase::UpdateTargetPoint()
     // Get the world space position of the crosshair
     FVector crosshair_world_pos, crosshair_world_dir;
     GetWorld()->GetFirstPlayerController()->DeprojectMousePositionToWorld(crosshair_world_pos, crosshair_world_dir);
-
+    
     // Trace from the weapon to the point of intersection
     FHitResult hit_result;
     FVector trace_start = crosshair_world_pos;

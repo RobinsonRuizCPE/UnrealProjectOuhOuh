@@ -2,12 +2,15 @@
 
 
 #include "VanquishCharacter.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 AVanquishCharacter::AVanquishCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	mCurrentHealth = mMaxHealth;
 }
 
 // Called when the game starts or when spawned
@@ -21,7 +24,6 @@ void AVanquishCharacter::BeginPlay()
 void AVanquishCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
 }
 
 // Called to bind functionality to input
@@ -49,3 +51,31 @@ void AVanquishCharacter::EndSwordAttack() {
 	e_current_sword_attack = SwordAttackNone;
 }
 
+void AVanquishCharacter::TakeDamageImpl(float Damage)
+{
+	mCurrentHealth -= Damage;
+	if (mCurrentHealth <= 0.0f)
+	{
+		//Die();
+	}
+}
+
+void AVanquishCharacter::Die() {
+	// Disable collision
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Disable movement
+	auto CharMovement = GetCharacterMovement();
+	if (CharMovement != nullptr)
+	{
+		CharMovement->StopMovementImmediately();
+	}
+
+	// Play death animation and destroy actor after a delay
+	//GetMesh()->PlayAnimation(DeathAnimation, false);
+	//
+	//FTimerHandle TimerHandle;
+	//GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
+	//GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
+}

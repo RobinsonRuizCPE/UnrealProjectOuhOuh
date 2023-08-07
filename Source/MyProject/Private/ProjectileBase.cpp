@@ -8,6 +8,7 @@
 #include "NiagaraComponent.h"
 
 #include "EnemyBase.h"
+#include "VanquishCharacter.h"
 
 // Sets default values
 AProjectileBase::AProjectileBase()
@@ -56,6 +57,10 @@ void AProjectileBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActo
     if (OtherActor) {
         if (OtherActor->GetClass()->IsChildOf(AEnemyBase::StaticClass())) {
             Cast<AEnemyBase>(OtherActor)->TakeDamageImpl(ProjectileDamage);
+        }
+ 
+        if (OtherActor->GetClass()->IsChildOf(AVanquishCharacter::StaticClass())) {
+            Cast<AVanquishCharacter>(OtherActor)->TakeDamageImpl(ProjectileDamage);
         }
     }
 }

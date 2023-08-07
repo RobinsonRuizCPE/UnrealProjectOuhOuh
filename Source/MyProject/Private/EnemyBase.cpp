@@ -11,12 +11,11 @@ AEnemyBase::AEnemyBase()
 {
     PrimaryActorTick.bCanEverTick = true;
 
-    auto mesh_comp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
-    RootComponent = mesh_comp;
+    RootComponent = GetCapsuleComponent();
 
     SetActorEnableCollision(true);
-    GetCapsuleComponent()->SetupAttachment(RootComponent);
-
+    //GetCapsuleComponent()->SetupAttachment(RootComponent);
+    
     Health = MaxHealth;
 }
 
@@ -27,11 +26,12 @@ void AEnemyBase::BeginPlay()
     {
         //RunBehaviorTree(BehaviorTree);
     }
-
+    
     GetMesh()->SetCollisionProfileName(TEXT("Enemy"));
+    SetActorEnableCollision(true);
 
-    float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
-    GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AEnemyBase::Attack, TimeBetweenShots, true, FirstDelay);
+    //float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
+    //GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AEnemyBase::Attack, TimeBetweenShots, true, FirstDelay);
 }
 
 void AEnemyBase::Tick(float DeltaTime)
@@ -42,64 +42,57 @@ void AEnemyBase::Tick(float DeltaTime)
 
 void AEnemyBase::UpdateAI(float DeltaTime)
 {
-    if (bIsDead)
-    {
+    if (bIsDead) {
         return;
     }
 
-    if (Target == nullptr)
-    {
+    if (Target == nullptr) {
         // Find the player character as target
         Target = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
     }
 
-    if (Target == nullptr)
-    {
+    if (Target == nullptr) {
         return;
     }
 
-    FVector TargetLocation = Target->GetActorLocation();
-    FVector SelfLocation = GetActorLocation();
-    FVector Direction = TargetLocation - SelfLocation;
-    //Direction.Z = 0.0f;
-    Direction.Normalize();
-
-    // Move towards the target
-    auto CharMovement = GetCharacterMovement();
-    if (CharMovement != nullptr)
-    {
-        //CharMovement->AddInputVector(Direction * MoveSpeed * DeltaTime);
-    }
-
-    // Rotate towards the target
-    FRotator LookAtRotation = FRotationMatrix::MakeFromX(Direction).Rotator();
-    RootComponent->SetWorldRotation(LookAtRotation);
-
-    // Check if the enemy is in range to attack
-    float DistanceToTarget = FVector::Distance(TargetLocation, SelfLocation);
-    if (DistanceToTarget <= AttackRange)
-    {
-        // Attack the target
-        Attack();
-    }
+    UpdateRotation();
 }
 
-void AEnemyBase::Attack()
-{
-    LastFireTime = GetWorld()->TimeSeconds;
+void AEnemyBase::UpdateRotation() {
+    FVector TargetLocation = Target->GetActorLocation();
+    FVector SelfLocation = GetActorLocation();
+    FVector Direction = (TargetLocation - SelfLocation).GetSafeNormal();
+
+    // Rotate towards the target
+    FRotator LookAtRotation = FRotationMatrix::MakeFromY(Direction).Rotator();
+    RootComponent->SetWorldRotation(Direction.ToOrientationRotator());
+}
+
+void AEnemyBase::Attack() {
+    if (!Target) {
+        return;
+    }
+
+    // Check if the enemy is in range to attack
+    float DistanceToTarget = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
+    if (DistanceToTarget > AttackRange) {
+        return;
+    }
+
+    //LastFireTime = GetWorld()->TimeSeconds;
 
     if (ProjectileClass != nullptr)
     {
         // Spawn projectile at the enemy's location
         FVector SpawnLocation = GetActorLocation();
-        FRotator SpawnRotation = RootComponent->GetComponentRotation();
+        FRotator SpawnRotation = GetActorRotation();
         AProjectileBase* Projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileClass, SpawnLocation, SpawnRotation);
 
         if (Projectile != nullptr)
         {
             // Set the projectile's owner to this enemy
             Projectile->SetOwner(this);
-            Projectile->SetProjectileTrajectory(GetActorForwardVector() * 1000.f);
+            Projectile->SetProjectileTrajectory(SpawnRotation.Vector() * 1000.f);
             Projectile->SetProjectileCollision(TEXT("EnemyProjectile"));
             Projectile->SetSpawnLocation(GetActorLocation());
             Projectile->SetProjectileMaxDistance(10000.f);
@@ -109,13 +102,11 @@ void AEnemyBase::Attack()
 
 void AEnemyBase::TakeDamageImpl(float Damage)
 {
-    if (bIsDead)
-    {
+    if (bIsDead) {
         return;
     }
 
     Health -= Damage;
-
     if (Health <= 0.0f)
     {
         Die();
@@ -139,6 +130,7 @@ void AEnemyBase::Die()
 
     // Play death animation and destroy actor after a delay
     GetMesh()->PlayAnimation(DeathAnimation, false);
+
     FTimerHandle TimerHandle;
     GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
     GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
