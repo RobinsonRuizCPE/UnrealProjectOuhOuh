@@ -2,6 +2,11 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/SkeletalMeshComponent.h"
+
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraParameterCollection.h"
+
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "TimerManager.h"
@@ -28,6 +33,9 @@ void AEnemyBase::BeginPlay()
     }
     
     GetMesh()->SetCollisionProfileName(TEXT("Enemy"));
+    UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(GetMesh()->GetOverlayMaterial(), nullptr);
+    GetMesh()->SetOverlayMaterial(MaterialInstance);
+    MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
     SetActorEnableCollision(true);
 
     //float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
@@ -100,8 +108,12 @@ void AEnemyBase::Attack() {
     }
 }
 
+
 void AEnemyBase::TakeDamageImpl(float Damage)
 {
+    ToggleGlow(true);
+    FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &AEnemyBase::ToggleGlow, false);
+    GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 2000.0f, false, false);
     if (bIsDead) {
         return;
     }
@@ -109,6 +121,7 @@ void AEnemyBase::TakeDamageImpl(float Damage)
     Health -= Damage;
     if (Health <= 0.0f)
     {
+        //ToggleGlow(false);
         Die();
     }
 }
@@ -130,6 +143,12 @@ void AEnemyBase::Die()
 
     // Play death animation and destroy actor after a delay
     GetMesh()->PlayAnimation(DeathAnimation, false);
+    if (DeathEffect) {
+        DeathEffectComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(DeathEffect, GetMesh(), "Core", FVector{}, FRotator{}, EAttachLocation::Type::SnapToTarget, true, true, ENCPoolMethod::None, true);
+        //DeathEffectComponent->SetFloatParameter(FName("Delay"), 0.1f);
+        DeathEffectComponent->SetVisibility(true, true);
+    }
+    
 
     FTimerHandle TimerHandle;
     GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
@@ -155,3 +174,11 @@ bool AEnemyBase::IsDead() const
 {
     return bIsDead;
 }
+
+
+void AEnemyBase::ToggleGlow(bool const activation) {
+    auto const overlay_instance = Cast<UMaterialInstanceDynamic>(GetMesh()->GetOverlayMaterial());
+    overlay_instance->SetScalarParameterValue(FName{ "HitEffectStrength" }, activation ? 1.0f : 0.0f);
+    GetWorldTimerManager().ClearTimer(TimerHandle_TimeForHitGlow);
+}
+

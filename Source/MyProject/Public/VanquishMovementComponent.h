@@ -25,6 +25,7 @@ protected:
 	void PhysFlying(float deltaTime, int32 Iterations) override;
 
 	/** Custom version of SlideAlongSurface that handles different movement modes separately; namely during walking physics we might not want to slide up slopes. */
+	UFUNCTION(BlueprintCallable, Category = "Pawn|Components|VanquishCharacterMovement")
 	float SlideAlongSurface(const FVector& Delta, float Time, const FVector& Normal, FHitResult& Hit, bool bHandleImpact) override;
 
 private:
