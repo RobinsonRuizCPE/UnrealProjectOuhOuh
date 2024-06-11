@@ -22,6 +22,7 @@ public:
 	void SetProjectileTrajectory(FVector const& world_direction);
 	void SetProjectileMaxDistance(float const max_distance) { MaxRange = max_distance; }
 	void SetSpawnLocation(FVector3d const spawn_location) { SpawnLocation = spawn_location; }
+	void SetProjectileCollision(FName const InCollisionProfileName);
 
 private: 
 	float const ComputeTraveledDistance();
@@ -56,5 +57,6 @@ public:
 private:
 	float MaxRange = 0;
 	FVector3d SpawnLocation;
+	float ProjectileDamage = 10;
 
 };
