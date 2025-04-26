@@ -43,8 +43,13 @@ void AWeaponBase::BeginPlay()
 
 void AWeaponBase::Fire()
 {
+    UWorld* pWorld = GetWorld();
+    if (!pWorld) {
+        return;
+    }
+
     // Will be used to avoid spam
-    LastFireTime = GetWorld()->TimeSeconds;
+    LastFireTime = pWorld->TimeSeconds;
 
     UpdateTargetPoint();
     SpawnProjectile();
@@ -53,8 +58,18 @@ void AWeaponBase::Fire()
 }
 
 void AWeaponBase::SpawnProjectile() const {
+    if (!ProjectileType) {
+        return;
+    }
+
+    UWorld* pWorld = GetWorld();
+    if (!pWorld) {
+        return;
+    }
+
     auto const projectile_velocity = TargetDirection * 1000.f;
-    auto const spawned_projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileType, GetActorLocation(), TargetDirection.ToOrientationRotator());
+    auto const spawn_location = MeshComp->GetSocketLocation(MuzzleSocketName);
+    auto const spawned_projectile = pWorld->SpawnActor<AProjectileBase>(ProjectileType, spawn_location, TargetDirection.ToOrientationRotator());
     spawned_projectile->SetOwner(GetParentActor());
     spawned_projectile->SetProjectileCollision(TEXT("CharacterProjectile"));
     spawned_projectile->SetProjectileTrajectory(projectile_velocity);
@@ -67,21 +82,31 @@ void AWeaponBase::PlayFireSound() {
         return;
     }
 
+    UWorld* pWorld = GetWorld();
+    if (!pWorld) {
+        return;
+    }
+
     auto sound_location = MeshComp->GetSocketLocation(MuzzleSocketName);
-    UGameplayStatics::PlaySoundAtLocation(GetWorld(), FireSound, sound_location);
+    UGameplayStatics::PlaySoundAtLocation(pWorld, FireSound, sound_location);
 }
 
 
 void AWeaponBase::PlayFireEffects()
 {
-    if (!MuzzleEffect) {
-        return;
+    if (MuzzleEffectComponent) {
+        MuzzleEffectComponent->Activate(true);
     }
 }
 
 void AWeaponBase::StartFire()
 {
-    float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
+    UWorld* pWorld = GetWorld();
+    if (!pWorld) {
+        return;
+    }
+
+    float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - pWorld->TimeSeconds, 0.0f);
     GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AWeaponBase::Fire, TimeBetweenShots, true, FirstDelay);
     MuzzleEffectComponent->ToggleVisibility(true);
 }
@@ -89,31 +114,90 @@ void AWeaponBase::StartFire()
 void AWeaponBase::StopFire()
 {
     GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
-    MuzzleEffectComponent->ToggleVisibility(true);
+    if (MuzzleEffectComponent) {
+        MuzzleEffectComponent->ToggleVisibility(false);
+    }
 }
 
 void AWeaponBase::UpdateTargetPoint()
 {
-    // Get the world space position of the crosshair
     FVector crosshair_world_pos, crosshair_world_dir;
-    GetWorld()->GetFirstPlayerController()->DeprojectMousePositionToWorld(crosshair_world_pos, crosshair_world_dir);
-    
-    // Trace from the weapon to the point of intersection
-    FHitResult hit_result;
+    APlayerController* pc = GetWorld()->GetFirstPlayerController();
+    if (!pc || !pc->DeprojectMousePositionToWorld(crosshair_world_pos, crosshair_world_dir))
+        return;
+
     FVector trace_start = crosshair_world_pos;
-    FVector trace_end = crosshair_world_pos + crosshair_world_dir * 10000.0f; // extend the trace far enough to hit anything in the scene
+    FVector trace_end = trace_start + crosshair_world_dir * WeaponRange;
+
+    FHitResult hit_result;
     FCollisionQueryParams params;
-    params.AddIgnoredActor(this); // ignore the weapon itself
-    auto const is_hit = GetWorld()->LineTraceSingleByChannel(hit_result, trace_start, trace_end, ECC_Visibility, params);
+    params.AddIgnoredActor(this);
+    if (AActor* meshOwner = GetOwner())
+        params.AddIgnoredActor(meshOwner);
 
-    // Calculate the direction of the projectile based on the result of the trace
-    if (is_hit) {
-        // If we hit something, aim at the point of intersection
-        TargetPoint = (hit_result.ImpactPoint);
-    }
-    else {
-        TargetPoint = (trace_end - crosshair_world_dir * 7000.0f);
+    AActor* rootOwner = FindRootOwnerActor();
+    if (!rootOwner) return;
+    FVector owner_forward = rootOwner->GetActorForwardVector();
+
+    bool is_hit = GetWorld()->LineTraceSingleByChannel(hit_result, trace_start, trace_end, ECC_Visibility, params);
+
+    // If we hit something
+    if (is_hit)
+    {
+        FVector to_hit = (hit_result.ImpactPoint - GetActorLocation()).GetSafeNormal();
+        float dot = FVector::DotProduct(owner_forward, to_hit);
+
+        float MinDot = -0.5f;
+        if (dot > MinDot)
+        {
+            TargetPoint = hit_result.ImpactPoint;
+            TargetDirection = to_hit;
+            return;
+        }
+        else
+        {
+            // Clamp to the edge of the allowed cone
+            FVector projected = FVector::VectorPlaneProject(to_hit, owner_forward).GetSafeNormal();
+            FVector clamped = (owner_forward * MinDot + projected * FMath::Sqrt(1 - MinDot * MinDot)).GetSafeNormal();
+
+            TargetDirection = clamped;
+            TargetPoint = GetActorLocation() + clamped * WeaponRange;
+            return;
+        }
     }
 
-    TargetDirection = (TargetPoint - GetActorLocation()).GetSafeNormal();
+    // If no hit, project a point far into the direction of the crosshair
+    FVector imagined_point = trace_end;
+    FVector to_imagined = (imagined_point - GetActorLocation()).GetSafeNormal();
+    float dot_imagined = FVector::DotProduct(owner_forward, to_imagined);
+
+    if (dot_imagined > 0.2f)
+    {
+        TargetPoint = imagined_point;
+        TargetDirection = FMath::VInterpTo(owner_forward, to_imagined, 0.5f, 1.0f).GetSafeNormal();;
+        return;
+    }
+
+    // Final fallback: straight ahead
+    FVector muzzle_forward = MeshComp->GetSocketRotation(MuzzleSocketName).Vector();
+    TargetDirection = muzzle_forward;
+    TargetPoint = GetActorLocation() + TargetDirection * WeaponRange;
+}
+
+AActor* AWeaponBase::FindRootOwnerActor() const
+{
+    const USceneComponent* parentComponent = Cast<USceneComponent>(GetRootComponent()->GetAttachParent());
+
+    while (parentComponent)
+    {
+        AActor* outerActor = parentComponent->GetOwner();
+        if (outerActor && outerActor != this)
+        {
+            return outerActor;
+        }
+
+        parentComponent = parentComponent->GetAttachParent();
+    }
+
+    return nullptr;
 }

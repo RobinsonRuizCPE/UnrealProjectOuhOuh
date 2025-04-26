@@ -51,7 +51,7 @@ public:
         UAnimationAsset* DeathAnimation;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
-        float DestroyDelay = 2.0f;
+        float DestroyDelay = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect")
         UNiagaraSystem* DeathEffect;

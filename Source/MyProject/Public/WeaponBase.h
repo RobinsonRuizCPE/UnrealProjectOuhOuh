@@ -104,4 +104,5 @@ public:
 
 private:
     void UpdateTargetPoint();
+    AActor* FindRootOwnerActor() const;
 };

@@ -6,7 +6,9 @@
 
 #include "Components/TimelineComponent.h"
 
-#include <Engine/Private/InterpolateComponentToAction.h>
+#include <../../../Engine\Source\Runtime\Engine\Private\InterpolateComponentToAction.h>
+
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/GameplayStatics.h"
 #include "NavigationSystem.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -28,13 +30,48 @@ void UBT_Task_UpdatePositionMatrix::update_matrix_pos(FVector const owner_pos) {
 		return;
 	}
 
-	MatrixPos = player_controller->GetPawn()->GetActorLocation() + (player_controller->GetPawn()->GetActorForwardVector() *1000);
+	FVector new_pos = player_controller->GetPawn()->GetActorLocation() + (player_controller->GetPawn()->GetActorForwardVector() * 1000);
+	add_movmement_randomness(new_pos);
+}
 
-	
-	auto result = FVector2D(FMath::FRandRange(-400,400), FMath::FRandRange(-400, 400));
+void UBT_Task_UpdatePositionMatrix::add_movmement_randomness(FVector& new_pos) {
+	FVector base_pos = new_pos;
+	auto random_addition = FVector2D(FMath::FRandRange(-400.f, 400.f), FMath::FRandRange (-400.f, 400.f));
 
-	MatrixPos.X += result.X;
-	MatrixPos.Z += result.Y;
+	base_pos.X += random_addition.X;
+	base_pos.Z += random_addition.Y;
+	if (!new_position_is_valid(MatrixPos, base_pos)) {
+		return;
+	}
+
+	MatrixPos = base_pos;
+}
+
+bool UBT_Task_UpdatePositionMatrix::new_position_is_valid(FVector const& current_pos, FVector const& new_pos) {
+	FHitResult hit_result;
+	FCollisionQueryParams query_params;
+	auto enemy = mBehaviorTreeComp->GetBlackboardComponent()->GetValueAsObject(FName("SelfActor"));
+	if (!enemy) {
+		return EBTNodeResult::Type::Failed;
+	}
+
+	if (auto enemy_actor = Cast<AEnemyBase>(enemy)) {
+		
+		query_params.AddIgnoredActor(enemy_actor); // Ignore the current actor during collision checks
+
+		// Perform a line trace (raycast) from current_pos to new_pos
+		bool hit = GetWorld()->LineTraceSingleByChannel(
+			hit_result,
+			enemy_actor->GetTransform().GetLocation(),
+			new_pos,
+			ECC_Visibility, // You can use a different collision channel if needed
+			query_params
+		);
+
+		return !hit;
+	}
+
+	return true;
 }
 
 void UBT_Task_UpdatePositionMatrix::MovementFinished() {
