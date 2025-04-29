@@ -99,9 +99,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Weapon")
         void StopFire();
 
-    UFUNCTION(BlueprintCallable, Category = "Weapon")
-        void SetAimDirection(FVector2D const& aim_direction) { AimDirection = aim_direction; };
-
 private:
     void UpdateTargetPoint();
+    AActor* FindRootOwnerActor() const;
 };

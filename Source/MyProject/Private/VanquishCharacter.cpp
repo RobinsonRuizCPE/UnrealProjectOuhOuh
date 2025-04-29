@@ -17,7 +17,7 @@ AVanquishCharacter::AVanquishCharacter()
 void AVanquishCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	GetMesh()->SetCollisionProfileName(TEXT("Character"));
+	//GetMesh()->SetCollisionProfileName(TEXT("Character"));
 }
 
 // Called every frame
@@ -51,26 +51,28 @@ void AVanquishCharacter::EndSwordAttack() {
 	e_current_sword_attack = SwordAttackNone;
 }
 
-void AVanquishCharacter::TakeDamageImpl(float Damage)
-{
-	mCurrentHealth -= Damage;
+float AVanquishCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) {
+	mCurrentHealth -= DamageAmount;
 	if (mCurrentHealth <= 0.0f)
 	{
-		//Die();
+		Die();
 	}
+
+	return DamageAmount;
 }
+
 
 void AVanquishCharacter::Die() {
 	// Disable collision
-	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	//GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	//GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Disable movement
-	auto CharMovement = GetCharacterMovement();
-	if (CharMovement != nullptr)
-	{
-		CharMovement->StopMovementImmediately();
-	}
+	//auto CharMovement = GetCharacterMovement();
+	//if (CharMovement != nullptr)
+	//{
+	//	CharMovement->StopMovementImmediately();
+	//}
 
 	// Play death animation and destroy actor after a delay
 	//GetMesh()->PlayAnimation(DeathAnimation, false);

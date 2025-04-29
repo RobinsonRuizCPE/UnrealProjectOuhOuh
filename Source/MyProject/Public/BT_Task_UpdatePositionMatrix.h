@@ -23,6 +23,8 @@ private:
 		uint8* NodeMemory) override;
 
 	void update_matrix_pos(FVector const owner_pos);
+	void add_movmement_randomness(FVector& new_pos);
+	bool new_position_is_valid(FVector const& current_pos, FVector const& new_pos);
 
 	void move_enemy_to(USceneComponent* Component, FVector TargetRelativeLocation, bool bEaseOut, bool bEaseIn, float OverTime, bool bForceShortestRotationPath, FLatentActionInfo LatentInfo);
 

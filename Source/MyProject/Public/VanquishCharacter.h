@@ -10,7 +10,7 @@
 
 
 UCLASS()
-class MYPROJECT_API AVanquishCharacter : public ACharacter
+class MYPROJECT_API AVanquishCharacter : public APawn
 {
 	GENERATED_BODY()
 
@@ -21,6 +21,7 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+	virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
 public:	
 	// Called every frame
@@ -41,7 +42,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	void EndDodging();
 
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	FTransform const& GetCurrentTransformAlongSpline() const { return mCurrentTransformAlongSpline; };
 
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	void const SetCurrentTransformAlongSpline(FTransform const current_transform) { mCurrentTransformAlongSpline = current_transform; };
 
 	/**
 	Sword Attack Handling
@@ -55,8 +60,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	float const GetCurrentHealtPercentage() const { return (mCurrentHealth/mMaxHealth); };
-
-	void TakeDamageImpl(float Damage);
 
 private:
 	void Die();
@@ -76,4 +79,5 @@ private:
 	bool b_is_attacking = false;
 	SwordAttackType e_current_sword_attack = SwordAttackNone;
 
+	FTransform mCurrentTransformAlongSpline;
 };
