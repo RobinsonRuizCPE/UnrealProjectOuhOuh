@@ -12,6 +12,14 @@
 
 #include "EnemyBase.generated.h"
 
+UENUM(BlueprintType)
+enum class EEnemyState : uint8
+{
+    FollowPlayer,
+    MoveRandomAdjacent,
+    Attack
+};
+
 UCLASS()
 class MYPROJECT_API AEnemyBase : public ACharacter
 {
@@ -25,21 +33,27 @@ protected:
 
 public:
     virtual void Tick(float DeltaTime) override;
+    virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
 protected:
-    void UpdateAI(float DeltaTime);
-
+    void UpdateFollowPlayer(float DeltaTime);
+    void UpdateMoveRandomAdjacent(float delta_time);
     void UpdateRotation();
 
+    void DecideNextAction();
+    void PickRandomAdjacentLocation();
+
+private:
+    void MoveTowards(FVector target, float delta_time);
+
+
 public:
-    //UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
-    //    class UBehaviorTree* BehaviorTree;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
         float MoveSpeed = 200.0f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
-        float AttackRange = 500.0f;
+        float AttackRange = 700.0f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
         float MaxHealth = 100.0f;
@@ -59,9 +73,6 @@ public:
 protected:
     UFUNCTION(BlueprintCallable, Category = "Weapon")
     void Attack();
-
-public:
-    void TakeDamageImpl(float Damage);
 
 protected:
     void Die();
@@ -85,13 +96,17 @@ protected:
         bool bIsDead = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
-        class ACharacter* Target;
+        class APawn* Target;
+
+    EEnemyState CurrentState = EEnemyState::FollowPlayer;
 
 private:
 
     UNiagaraComponent* DeathEffectComponent;
     float LastFireTime;
     float TimeBetweenShots = 2.f;
+    float FollowDistance = 600.f;
     FTimerHandle TimerHandle_TimeBetweenShots;
     FTimerHandle TimerHandle_TimeForHitGlow;
+    FVector2D RelativeRandomOffset;
 };

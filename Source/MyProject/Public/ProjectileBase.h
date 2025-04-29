@@ -8,6 +8,7 @@
 #include "ProjectileBase.generated.h"
 
 class UNiagaraSystem;
+class UNiagaraComponent;
 class USoundBase;
 
 UCLASS()
@@ -26,6 +27,9 @@ public:
 
 private: 
 	float const ComputeTraveledDistance();
+
+	void HandleProjectileImpact(AActor* OtherActor, FVector const& ImpactPoint, const FHitResult& HitResult);
+
 
 protected:
 	// Called when the game starts or when spawned
@@ -50,6 +54,9 @@ protected:
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
+	UFUNCTION()
+	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit);
+
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -58,5 +65,8 @@ private:
 	float MaxRange = 0;
 	FVector3d SpawnLocation;
 	float ProjectileDamage = 10;
+
+	UPROPERTY()
+	UNiagaraComponent* TraceEffectComponent;
 
 };

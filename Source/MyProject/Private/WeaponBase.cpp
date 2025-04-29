@@ -69,7 +69,13 @@ void AWeaponBase::SpawnProjectile() const {
 
     auto const projectile_velocity = TargetDirection * 1000.f;
     auto const spawn_location = MeshComp->GetSocketLocation(MuzzleSocketName);
-    auto const spawned_projectile = pWorld->SpawnActor<AProjectileBase>(ProjectileType, spawn_location, TargetDirection.ToOrientationRotator());
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    auto const spawned_projectile = pWorld->SpawnActor<AProjectileBase>(ProjectileType, spawn_location, TargetDirection.ToOrientationRotator(), SpawnParams);
+    if (!spawned_projectile) {
+        return;
+    }
+
     spawned_projectile->SetOwner(GetParentActor());
     spawned_projectile->SetProjectileCollision(TEXT("CharacterProjectile"));
     spawned_projectile->SetProjectileTrajectory(projectile_velocity);
@@ -127,7 +133,7 @@ void AWeaponBase::UpdateTargetPoint()
         return;
 
     FVector trace_start = crosshair_world_pos;
-    FVector trace_end = trace_start + crosshair_world_dir * WeaponRange;
+    FVector trace_end = trace_start + crosshair_world_dir * 5000;
 
     FHitResult hit_result;
     FCollisionQueryParams params;
@@ -169,19 +175,8 @@ void AWeaponBase::UpdateTargetPoint()
     // If no hit, project a point far into the direction of the crosshair
     FVector imagined_point = trace_end;
     FVector to_imagined = (imagined_point - GetActorLocation()).GetSafeNormal();
-    float dot_imagined = FVector::DotProduct(owner_forward, to_imagined);
-
-    if (dot_imagined > 0.2f)
-    {
-        TargetPoint = imagined_point;
-        TargetDirection = FMath::VInterpTo(owner_forward, to_imagined, 0.5f, 1.0f).GetSafeNormal();;
-        return;
-    }
-
-    // Final fallback: straight ahead
-    FVector muzzle_forward = MeshComp->GetSocketRotation(MuzzleSocketName).Vector();
-    TargetDirection = muzzle_forward;
-    TargetPoint = GetActorLocation() + TargetDirection * WeaponRange;
+    TargetPoint = imagined_point;
+    TargetDirection = FMath::VInterpTo(owner_forward, to_imagined, 0.95f, 1.0f).GetSafeNormal();
 }
 
 AActor* AWeaponBase::FindRootOwnerActor() const
