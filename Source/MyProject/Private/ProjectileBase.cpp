@@ -34,7 +34,20 @@ AProjectileBase::AProjectileBase()
 
 void AProjectileBase::SetProjectileTrajectory(FVector const& world_direction)
 {
+    //SetActorRotation(FRotator::ZeroRotator);
     ProjectileMovementComponent->Velocity = world_direction * 10;
+
+    if (TraceEffectComponent && ProjectileMesh)
+    {
+        FVector world_dir = ProjectileMovementComponent->Velocity.GetSafeNormal();
+        FVector local_dir = TraceEffectComponent->GetComponentTransform().InverseTransformVectorNoScale(world_dir);
+
+        FVector beam_start = local_dir * 100.f;
+        FVector beam_end = -local_dir * 700.f;
+
+        TraceEffectComponent->SetVectorParameter("BeamStart", beam_start);
+        TraceEffectComponent->SetVectorParameter("BeamEnd", beam_end);
+    }
 }
 
 // Called when the game starts or when spawned
@@ -57,7 +70,6 @@ void AProjectileBase::BeginPlay()
             true                      // Auto destroy with parent
         );
 
-        TraceEffectComponent->SetupAttachment(ProjectileMesh);
         TraceEffectComponent->SetAutoActivate(false); // Don't play until we tell it
     }
 

@@ -30,15 +30,6 @@ void AVanquishCharacter::Tick(float DeltaTime)
 void AVanquishCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-}
-
-void AVanquishCharacter::StartDodging() {
-	b_is_dodging = true;
-}
-
-void AVanquishCharacter::EndDodging() {
-	b_is_dodging = false;
 }
 
 void AVanquishCharacter::StartSwordAttack(SwordAttackType const attack_to_start) {

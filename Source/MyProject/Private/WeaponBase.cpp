@@ -132,9 +132,6 @@ void AWeaponBase::UpdateTargetPoint()
     if (!pc || !pc->DeprojectMousePositionToWorld(crosshair_world_pos, crosshair_world_dir))
         return;
 
-    FVector trace_start = crosshair_world_pos;
-    FVector trace_end = trace_start + crosshair_world_dir * 5000;
-
     FHitResult hit_result;
     FCollisionQueryParams params;
     params.AddIgnoredActor(this);
@@ -144,6 +141,10 @@ void AWeaponBase::UpdateTargetPoint()
     AActor* rootOwner = FindRootOwnerActor();
     if (!rootOwner) return;
     FVector owner_forward = rootOwner->GetActorForwardVector();
+
+    FVector actor_loc = rootOwner->GetActorLocation();
+    FVector trace_start = crosshair_world_pos + crosshair_world_dir* 900;
+    FVector trace_end = crosshair_world_pos + crosshair_world_dir * 5000;
 
     bool is_hit = GetWorld()->LineTraceSingleByChannel(hit_result, trace_start, trace_end, ECC_Visibility, params);
 

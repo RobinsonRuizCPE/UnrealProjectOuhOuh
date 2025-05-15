@@ -25,6 +25,8 @@ public:
 	void SetSpawnLocation(FVector3d const spawn_location) { SpawnLocation = spawn_location; }
 	void SetProjectileCollision(FName const InCollisionProfileName);
 
+	float const GetProjectileDamage() const { return ProjectileDamage; };
+
 private: 
 	float const ComputeTraveledDistance();
 

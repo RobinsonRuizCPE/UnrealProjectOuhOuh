@@ -34,13 +34,16 @@ public:
 	Dodge Handling
 	*/
 	UFUNCTION(BlueprintCallable, Category=AVanquishCharacter)
-	bool const IsDodging() const { return b_is_dodging; };
+	bool const GetDodgingStatus() const { return b_is_dodging; };
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	void StartDodging();
+	void SetDodgingStatus(bool new_status) { b_is_dodging = new_status; }
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	void EndDodging();
+	bool const GetDodgingStatusCanMoveAgain() const { return b_is_dodging_can_move_again; };
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	void SetDodgingStatusCanMoveAgain(bool new_status) { b_is_dodging_can_move_again = new_status; }
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	FTransform const& GetCurrentTransformAlongSpline() const { return mCurrentTransformAlongSpline; };
@@ -73,6 +76,7 @@ protected:
 
 private:
 	// Dodge variables
+	bool b_is_dodging_can_move_again = true;
 	bool b_is_dodging = false;
 
 	//Attack variables

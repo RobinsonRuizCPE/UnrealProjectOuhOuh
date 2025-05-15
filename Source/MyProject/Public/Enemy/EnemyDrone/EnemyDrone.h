@@ -21,6 +21,14 @@ public:
 
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
+    // EnemyDrone.h
+protected:
+    virtual void PerformAttack() override;
+    virtual float GetAttackWaitTime() const override;
+
+    UFUNCTION(BlueprintCallable)
+        void FireProjectileFromNotify();
+
 private:
     void SpawnAntennaDebris(FTransform const& bone_transform, const FVector& Impulse);
 
@@ -36,5 +44,8 @@ protected:
 private:
     UPROPERTY(EditDefaultsOnly, Category = "Drone|Debris")
         UStaticMesh* AntennaDebrisMesh;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Animation")
+        UAnimMontage* AttackMontage;
 
 };

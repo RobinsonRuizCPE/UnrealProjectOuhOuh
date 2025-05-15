@@ -17,7 +17,6 @@ AEnemyBase::AEnemyBase()
     RootComponent = GetCapsuleComponent();
 
     SetActorEnableCollision(true);
-    //GetCapsuleComponent()->SetupAttachment(RootComponent);
 }
 
 void AEnemyBase::BeginPlay()
@@ -25,19 +24,10 @@ void AEnemyBase::BeginPlay()
     Super::BeginPlay();
     Health = MaxHealth;
 
-    //if (BehaviorTree != nullptr)
-    {
-        //RunBehaviorTree(BehaviorTree);
-    }
-    
-    GetMesh()->SetCollisionProfileName(TEXT("Enemy"));
     UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(GetMesh()->GetOverlayMaterial(), nullptr);
     GetMesh()->SetOverlayMaterial(MaterialInstance);
     MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
     SetActorEnableCollision(true);
-
-    float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
-    GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AEnemyBase::Attack, TimeBetweenShots, true, FirstDelay);
 
     GetCharacterMovement()->bOrientRotationToMovement = false;
     bUseControllerRotationYaw = false;
@@ -55,50 +45,52 @@ void AEnemyBase::Tick(float DeltaTime)
     }
 }
 
-void AEnemyBase::UpdateFollowPlayer(float DeltaTime)
-{
+void AEnemyBase::UpdateFollowPlayer(float delta_time) {
     auto const target_player = Cast<AVanquishCharacter>(Target);
-    if (!target_player)
-    {
-        return;
-    }
+    if (!target_player) return;
 
     FTransform player_spline_transform = target_player->GetCurrentTransformAlongSpline();
-    FVector desired_location = player_spline_transform.GetLocation() + player_spline_transform.GetRotation().GetForwardVector() * FollowDistance;
-    MoveTowards(desired_location, DeltaTime);
-    float distance = FVector::Dist(GetActorLocation(), desired_location);
-    if (distance < 20.f) // Only move if noticeably off
+    FVector player_location = player_spline_transform.GetLocation();
+    FVector player_forward = player_spline_transform.GetRotation().GetForwardVector();
+
+    // Call common velocity function with no lateral offset
+    FVector velocity = ComputeAxisSeparatedOffsetVelocity(GetActorLocation(), player_location, player_forward, FVector2D(0.f, 0.f), FollowDistance, ForwardCorrectionSpeed, 0.f);
+
+    GetCharacterMovement()->Velocity = velocity;
+
+    // Optional: use forward-only distance check
+    FVector center_target = player_location + player_forward * FollowDistance;
+    float distance = FVector::Dist(GetActorLocation(), center_target);
+
+    if (distance < 200.f)
     {
         GetCharacterMovement()->Velocity = FVector::ZeroVector;
         DecideNextAction();
     }
 }
 
-void AEnemyBase::UpdateMoveRandomAdjacent(float delta_time)
-{
+void AEnemyBase::UpdateMoveRandomAdjacent(float delta_time) {
     auto const target_player = Cast<AVanquishCharacter>(Target);
-    if (!target_player)
-    {
-        return;
-    }
+    if (!target_player) return;
 
     FTransform player_spline_transform = target_player->GetCurrentTransformAlongSpline();
-
     FVector player_location = player_spline_transform.GetLocation();
     FVector player_forward = player_spline_transform.GetRotation().GetForwardVector();
+
+    FVector velocity = ComputeAxisSeparatedOffsetVelocity(GetActorLocation(), player_location, player_forward, RelativeRandomOffset, FollowDistance, ForwardCorrectionSpeed, OffsetMovementSpeed);
+
+    GetCharacterMovement()->Velocity = velocity;
+
+    // Distance to lateral offset only (ignoring forward)
+    FVector center_target = player_location + player_forward * FollowDistance;
     FVector player_right = FVector::CrossProduct(FVector::UpVector, player_forward).GetSafeNormal();
     FVector player_up = FVector::UpVector;
+    FVector offset_target = center_target + (player_right * RelativeRandomOffset.X) + (player_up * RelativeRandomOffset.Y);
 
-    // Update the target location based on current player position
-    FVector offset_center = player_location + player_forward * FollowDistance;
-    auto const updated_location = offset_center + (player_right * RelativeRandomOffset.X) + (player_up * RelativeRandomOffset.Y);
-
-    MoveTowards(updated_location, delta_time);
-
-    float distance = FVector::Dist(GetActorLocation(), updated_location);
-    if (distance < 20.f)
+    float lateral_distance = FVector::DistXY(GetActorLocation(), offset_target);
+    if (lateral_distance < 200.f)
     {
-        CurrentState = EEnemyState::Attack;
+        BeginWaitState(2);
     }
 }
 
@@ -112,11 +104,48 @@ void AEnemyBase::UpdateRotation() {
     RootComponent->SetWorldRotation(Direction.ToOrientationRotator());
 }
 
-void AEnemyBase::MoveTowards(FVector target, float delta_time) {
-    FVector direction = (target - GetActorLocation()).GetSafeNormal();
-    float distance = FVector::Dist(GetActorLocation(), target);
-    float speed = FMath::Clamp(distance * 5.f, 600.f, 2500.f);
-    GetCharacterMovement()->Velocity = direction * speed;
+void AEnemyBase::UpdateWaitingState(float delta_time)
+{
+    auto const target_player = Cast<AVanquishCharacter>(Target);
+    if (!target_player)
+    {
+        return;
+    }
+
+    FTransform player_spline_transform = target_player->GetCurrentTransformAlongSpline();
+
+    FVector player_location = player_spline_transform.GetLocation();
+    FVector player_forward = player_spline_transform.GetRotation().GetForwardVector();
+    FVector velocity = ComputeAxisSeparatedOffsetVelocity(GetActorLocation(), player_location, player_forward, RelativeRandomOffset, FollowDistance, ForwardCorrectionSpeed, OffsetMovementSpeed);
+
+    GetCharacterMovement()->Velocity = velocity;
+}
+
+FVector const AEnemyBase::ComputeAxisSeparatedOffsetVelocity(FVector current_location, FVector player_position, FVector player_forward, FVector2D relative_offset, float follow_distance, float forward_speed_max, float offset_speed_max) const {
+    // Locked position in front of player
+    FVector center_target = player_position + player_forward * follow_distance;
+
+    // Right + Up vector for local offset
+    FVector player_right = FVector::CrossProduct(FVector::UpVector, player_forward).GetSafeNormal();
+    FVector player_up = FVector::UpVector;
+    FVector offset_target = center_target + (player_right * relative_offset.X) + (player_up * relative_offset.Y);
+
+    // --- Forward correction ---
+    FVector to_center = center_target - current_location;
+    float forward_amount = FVector::DotProduct(to_center, player_forward);
+    FVector forward_correction = player_forward * forward_amount;
+
+    float forward_distance = FMath::Abs(forward_amount);
+    float forward_speed = FMath::Clamp(forward_distance * 10.f, 200.f, ForwardCorrectionSpeed);
+    FVector forward_velocity = forward_correction.GetSafeNormal() * forward_speed;
+
+    // --- Lateral/vertical offset ---
+    FVector offset_vector = FVector::VectorPlaneProject(offset_target - current_location, player_forward);
+    float offset_distance = offset_vector.Size();
+    float offset_speed = FMath::Clamp(offset_distance * 10.f, 150.f, OffsetMovementSpeed);
+    FVector offset_velocity = offset_vector.GetSafeNormal() * offset_speed;
+
+    return forward_velocity + offset_velocity;
 }
 
 
@@ -125,59 +154,79 @@ void AEnemyBase::DecideNextAction() {
     if (random_value < 0.5f) // 50% chance
     {
         PickRandomAdjacentLocation();
-        CurrentState = EEnemyState::MoveRandomAdjacent;
+        mCurrentState = EEnemyState::MoveRandomAdjacent;
     }
     else
     {
-        CurrentState = EEnemyState::Attack;
+        mCurrentState = EEnemyState::Attack;
     }
 }
 
 void AEnemyBase::PickRandomAdjacentLocation()
 {
-    RelativeRandomOffset = FVector2D(
-        FMath::FRandRange(-500.f, 500.f),
-        FMath::FRandRange(-500.f, 500.f)
-    );
+    FVector2D new_offset = RelativeRandomOffset;
+    const int max_attempts = 10;
+    auto const min_offset = 200;
+    int attempts = 0;
+
+    while (FVector2D::Distance(new_offset, RelativeRandomOffset) < min_offset && attempts < max_attempts) {
+        new_offset = FVector2D(FMath::FRandRange(-800.f, 800.f), FMath::FRandRange(-700.f, 700.f));
+        attempts++;
+    }
+
+    RelativeRandomOffset = new_offset;
 }
 
-void AEnemyBase::Attack() {
-    if (!Target) {
+void AEnemyBase::Attack()
+{
+    if (!Target || bIsDead)
+        return;
+
+    float distance = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
+    if (distance > AttackRange) {
+        BeginWaitState(0.5f);
         return;
     }
 
-    // Check if the enemy is in range to attack
-    float DistanceToTarget = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
-    if (DistanceToTarget > AttackRange) {
-        DecideNextAction();
+    UpdateRotation();
+
+    PerformAttack();
+    BeginWaitState(GetAttackWaitTime());
+}
+
+// BASE BEhavior but might delete this later
+void AEnemyBase::PerformAttack()
+{
+    if (!ProjectileClass)
         return;
-    }
 
-    //LastFireTime = GetWorld()->TimeSeconds;
+    FVector spawn_location = GetActorLocation();
+    FRotator spawn_rotation = GetActorRotation();
 
-    if (!ProjectileClass) {
+    AProjectileBase* projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileClass, spawn_location, spawn_rotation);
+    if (!projectile)
         return;
-    }
 
-    // Spawn projectile at the enemy's location
-    FVector SpawnLocation = GetActorLocation();
-    FRotator SpawnRotation = GetActorRotation();
-    AProjectileBase* Projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileClass, SpawnLocation, SpawnRotation);
+    projectile->SetOwner(this);
+    projectile->SetProjectileTrajectory(spawn_rotation.Vector() * 1000.f);
+    projectile->SetProjectileCollision(TEXT("EnemyProjectile"));
+    projectile->SetSpawnLocation(spawn_location);
+    projectile->SetProjectileMaxDistance(10000.f);
+}
 
-    if (!Projectile) {
-        return;
-    }
+void AEnemyBase::BeginWaitState(float duration) {
+    mCurrentState = EEnemyState::Waiting;
 
-    // Set the projectile's owner to this enemy
-    Projectile->SetOwner(this);
-    Projectile->SetProjectileTrajectory(SpawnRotation.Vector() * 1000.f);
-    Projectile->SetProjectileCollision(TEXT("EnemyProjectile"));
-    Projectile->SetSpawnLocation(GetActorLocation());
-    Projectile->SetProjectileMaxDistance(10000.f);
+    // Set a timer to call FinishWaitState after 'duration'
+    FTimerDelegate TimerCallback;
+    TimerCallback.BindUObject(this, &AEnemyBase::FinishWaitState);
+
+    GetWorldTimerManager().SetTimer(WaitTimerHandle, TimerCallback, duration, false);
+}
+
+void AEnemyBase::FinishWaitState() {
     DecideNextAction();
 }
-    
-
 
 float AEnemyBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
@@ -191,7 +240,6 @@ float AEnemyBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
     Health -= DamageAmount;
     if (Health <= 0.0f)
     {
-        //ToggleGlow(false);
         Die();
     }
 

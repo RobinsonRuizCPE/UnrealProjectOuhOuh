@@ -26,7 +26,9 @@ void AEnemyDrone::Tick(float DeltaTime) {
         return;
     }
 
-    switch (CurrentState)
+    UpdateRotation();
+
+    switch (mCurrentState)
     {
     case EEnemyState::FollowPlayer:
         UpdateFollowPlayer(DeltaTime);
@@ -37,9 +39,10 @@ void AEnemyDrone::Tick(float DeltaTime) {
     case EEnemyState::Attack:
         Attack();
         break;
+    case EEnemyState::Waiting:
+        UpdateWaitingState(DeltaTime);
+        break;
     }
-
-    UpdateRotation();
 }
 
 float AEnemyDrone::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
@@ -85,6 +88,48 @@ float AEnemyDrone::TakeDamage(float DamageAmount, const FDamageEvent& DamageEven
 
     // Call base class to process health, death, etc.
     return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
+
+void AEnemyDrone::PerformAttack()
+{
+    if (!AttackMontage)
+        return;
+
+    if (GetMesh()->GetAnimInstance()->Montage_IsPlaying(AttackMontage)) {
+        return;
+    }
+
+    PlayAnimMontage(AttackMontage, 1.f);  // just play the animation
+}
+
+float AEnemyDrone::GetAttackWaitTime() const
+{
+    return AttackMontage ? AttackMontage->GetPlayLength() : 1.0f;
+}
+
+void AEnemyDrone::FireProjectileFromNotify()
+{
+    if (!Target || bIsDead || !ProjectileClass)
+        return;
+
+    float distance = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
+    if (distance > AttackRange)
+        return;
+
+    UpdateRotation(); // re-check direction at time of firing
+
+    FVector spawn_location = GetActorLocation();
+    FRotator spawn_rotation = GetActorRotation();
+
+    AProjectileBase* projectile = GetWorld()->SpawnActor<AProjectileBase>(ProjectileClass, spawn_location, spawn_rotation);
+    if (!projectile)
+        return;
+
+    projectile->SetOwner(this);
+    projectile->SetProjectileTrajectory(spawn_rotation.Vector() * 1000.f);
+    projectile->SetProjectileCollision(TEXT("EnemyProjectile"));
+    projectile->SetSpawnLocation(spawn_location);
+    projectile->SetProjectileMaxDistance(10000.f);
 }
 
 void AEnemyDrone::SpawnAntennaDebris(FTransform const& bone_transform, const FVector& Impulse) {
