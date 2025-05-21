@@ -30,6 +30,7 @@ ADestroyableObstacle::ADestroyableObstacle()
     GeometryCollection->SetVisibility(false);
     GeometryCollection->SetSimulatePhysics(false);
     GeometryCollection->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    GeometryCollection->OnComponentBeginOverlap.AddDynamic(this, &ADestroyableObstacle::OnGeoCollectionOverlap);
     GeometryCollection->OnComponentHit.AddDynamic(this, &ADestroyableObstacle::OnGeoCollectionHit);
 
     FieldSystem = CreateDefaultSubobject<UFieldSystemComponent>(TEXT("FieldSystem"));
@@ -64,8 +65,17 @@ void ADestroyableObstacle::OnMeshOverlap(UPrimitiveComponent* OverlappedComp, AA
     }
 }
 
+void ADestroyableObstacle::OnGeoCollectionOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+    HandleGeoCollectionDamage(OtherActor, SweepResult);
+}
+
 void ADestroyableObstacle::OnGeoCollectionHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
+    HandleGeoCollectionDamage(OtherActor, Hit);
+}
+
+void ADestroyableObstacle::HandleGeoCollectionDamage(AActor* OtherActor, const FHitResult& Hit) {
     auto* projectile = Cast<AProjectileBase>(OtherActor);
     if (!projectile || !bHasBeenDestroyed) return;
 
@@ -85,7 +95,7 @@ void ADestroyableObstacle::OnGeoCollectionHit(UPrimitiveComponent* HitComponent,
 
     FieldSystem->ApplyPhysicsField(true, EFieldPhysicsType::Field_ExternalClusterStrain, nullptr, radial_field);
 
-    FVector impulse = projectile->GetVelocity().GetSafeNormal() * projectile->GetProjectileDamage() *600000;
+    FVector impulse = projectile->GetVelocity().GetSafeNormal() * projectile->GetProjectileDamage() * 600000;
     GeometryCollection->AddImpulseAtLocation(impulse, Hit.ImpactPoint);
 }
 

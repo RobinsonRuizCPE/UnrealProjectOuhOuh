@@ -8,6 +8,7 @@
 #include "WeaponBase.h"
 #include "VanquishCharacter.generated.h"
 
+class ASwordSlashProjectile;
 
 UCLASS()
 class MYPROJECT_API AVanquishCharacter : public APawn
@@ -22,6 +23,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+
+	void ToggleGlow(bool const activation);
 
 public:	
 	// Called every frame
@@ -46,6 +49,9 @@ public:
 	void SetDodgingStatusCanMoveAgain(bool new_status) { b_is_dodging_can_move_again = new_status; }
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	USkeletalMeshComponent* GetMesh() { return SkeletalMesh; }
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	FTransform const& GetCurrentTransformAlongSpline() const { return mCurrentTransformAlongSpline; };
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
@@ -55,11 +61,17 @@ public:
 	Sword Attack Handling
 	*/
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	bool const IsSwordAttacking() const { return b_is_attacking; };
+	SwordAttackType const GetSwordAttack() const { return e_current_sword_attack; };
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	void StartSwordAttack(SwordAttackType const attack_to_start);
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	void EndSwordAttack();
+
+	UFUNCTION()
+	void OnComboReset();
+
+	UFUNCTION(BlueprintCallable, Category = "Attack")
+	void TriggerSwordAttack();
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	float const GetCurrentHealtPercentage() const { return (mCurrentHealth/mMaxHealth); };
@@ -67,7 +79,23 @@ public:
 private:
 	void Die();
 
+	float PlayAnimMontage(UAnimMontage* AnimMontage, float InPlayRate = 1.f, FName StartSectionName = NAME_None);
+	void StopAnimMontage(UAnimMontage* AnimMontage);
+	UAnimMontage* GetCurrentMontage();
+
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UCapsuleComponent* CapsuleComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* SkeletalMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* HitAnimMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	TSubclassOf<ASwordSlashProjectile> SwordSlashProjectileHorizontalClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float mMaxHealth = 100.0f;
 
@@ -81,7 +109,11 @@ private:
 
 	//Attack variables
 	bool b_is_attacking = false;
+	bool b_attack_buffered = false;
 	SwordAttackType e_current_sword_attack = SwordAttackNone;
+	FTimerHandle combo_reset_timer_handle;
+	float combo_max_delay = 1.0f;
 
+	FTimerHandle TimerHandle_TimeForHitGlow;
 	FTransform mCurrentTransformAlongSpline;
 };

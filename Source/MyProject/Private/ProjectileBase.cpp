@@ -16,11 +16,11 @@ AProjectileBase::AProjectileBase()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-	ProjectileMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
-    ProjectileMesh->SetVisibility(true);
-    ProjectileMesh->OnComponentBeginOverlap.AddDynamic(this, &AProjectileBase::OnOverlap);
-    ProjectileMesh->OnComponentHit.AddDynamic(this, &AProjectileBase::OnHit);
-    SetRootComponent(ProjectileMesh);
+	CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
+    CollisionSphere->SetVisibility(true);
+    CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &AProjectileBase::OnOverlap);
+    CollisionSphere->OnComponentHit.AddDynamic(this, &AProjectileBase::OnHit);
+    SetRootComponent(CollisionSphere);
 
 	ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
     ProjectileMovementComponent->InitialSpeed = 3000.0f;
@@ -36,8 +36,7 @@ void AProjectileBase::SetProjectileTrajectory(FVector const& world_direction)
 {
     //SetActorRotation(FRotator::ZeroRotator);
     ProjectileMovementComponent->Velocity = world_direction * 10;
-
-    if (TraceEffectComponent && ProjectileMesh)
+    if (TraceEffectComponent)
     {
         FVector world_dir = ProjectileMovementComponent->Velocity.GetSafeNormal();
         FVector local_dir = TraceEffectComponent->GetComponentTransform().InverseTransformVectorNoScale(world_dir);
@@ -56,13 +55,13 @@ void AProjectileBase::BeginPlay()
 	Super::BeginPlay();
     if(GetOwner())
     {
-        ProjectileMesh->IgnoreActorWhenMoving(GetOwner(), true);
+        CollisionSphere->IgnoreActorWhenMoving(GetOwner(), true);
     }
 
     if (TraceEffect) {
         TraceEffectComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
             TraceEffect,
-            ProjectileMesh,           // Attach to the mesh so it follows properly
+            CollisionSphere,           // Attach to the mesh so it follows properly
             NAME_None,                // Attach to socket name, none in this case
             FVector::ZeroVector,      // Relative location
             FRotator::ZeroRotator,    // Relative rotation
@@ -84,12 +83,40 @@ void AProjectileBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActo
 }
 
 void AProjectileBase::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
+    //Shortcut here to avoid dealing with the piercing shot comparaison, technically useless
+    if (!PiercingShot) {
+        HandleProjectileImpact(OtherActor, SweepResult.ImpactPoint, SweepResult);
+        return;
+    }
+
+    // Ghost hit result for god knows why ???
+    if (SweepResult.Location.IsNearlyZero(0.01)) {
+        return;
+    }
+
+    // Do not hit the same boneless-actor ( :p ) twice
+    if (SweepResult.BoneName.IsNone()) {
+        if (HitActors.Contains(OtherActor))
+            return;
+
+        HitActors.Add(OtherActor);
+        HandleProjectileImpact(OtherActor, SweepResult.ImpactPoint, SweepResult);
+        return;
+    }
+
+    // Do not hit the same bone twice
+    auto const hit_key = TPair<TWeakObjectPtr<AActor>, FName>(OtherActor, SweepResult.BoneName);
+    if (HitBones.Contains(hit_key))
+        return;
+
+    HitBones.Add(hit_key);
     HandleProjectileImpact(OtherActor, SweepResult.ImpactPoint, SweepResult);
 }
 
 // Called every frame
 void AProjectileBase::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
+
     if (ComputeTraveledDistance() >= MaxRange) {
         Destroy();
     }
@@ -111,7 +138,9 @@ void AProjectileBase::HandleProjectileImpact(AActor* OtherActor, FVector const& 
 
     UGameplayStatics::ApplyPointDamage(OtherActor, ProjectileDamage, ProjectileMovementComponent->Velocity, HitResult, GetInstigatorController(), this, UDamageType::StaticClass());
 
-    Destroy();
+    if (!PiercingShot) {
+        Destroy();
+    }
 }
 
 float const AProjectileBase::ComputeTraveledDistance() {
@@ -119,5 +148,5 @@ float const AProjectileBase::ComputeTraveledDistance() {
 }
 
 void AProjectileBase::SetProjectileCollision(FName const InCollisionProfileName) {
-    ProjectileMesh->SetCollisionProfileName(InCollisionProfileName);
+    CollisionSphere->SetCollisionProfileName(InCollisionProfileName);
 }

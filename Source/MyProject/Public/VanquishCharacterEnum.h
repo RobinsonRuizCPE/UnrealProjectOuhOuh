@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 /** Enum for controlling sword attack state. */
-UENUM()
+UENUM(BlueprintType)
 enum SwordAttackType {
 	SwordAttack0,
 	SwordAttack1,

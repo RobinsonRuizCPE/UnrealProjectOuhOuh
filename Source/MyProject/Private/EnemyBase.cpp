@@ -268,8 +268,11 @@ void AEnemyBase::Die()
         //DeathEffectComponent->SetFloatParameter(FName("Delay"), 0.1f);
         DeathEffectComponent->SetVisibility(true, true);
     }
-    
 
+    if (DestroyHideMesh) {
+        GetMesh()->SetVisibility(false);
+    }
+    
     FTimerHandle TimerHandle;
     GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
     GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);

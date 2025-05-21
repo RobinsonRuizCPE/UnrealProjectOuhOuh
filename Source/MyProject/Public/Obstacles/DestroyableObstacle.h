@@ -31,9 +31,14 @@ protected:
     UFUNCTION()
         void OnMeshOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
+    UFUNCTION(BlueprintCallable)
+    void OnGeoCollectionOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
     // Only callable cause UE 5 blueprint hot reload does not exists...
     UFUNCTION(BlueprintCallable)
     void OnGeoCollectionHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+
+    void HandleGeoCollectionDamage(AActor* OtherActor, const FHitResult& Hit);
 
     void HandleDestruction(FVector impact_location = FVector::ZeroVector);
 

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "Components/SphereComponent.h"
 #include "ProjectileBase.generated.h"
 
 class UNiagaraSystem;
@@ -37,8 +38,14 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	UPROPERTY(Category = "test", EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
-	UMeshComponent* ProjectileMesh;
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Projectile")
+	UShapeComponent* CollisionSphere;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.00001", AllowPrivateAccess = "true"))
+	float CollisionRadius = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	bool PiercingShot = false;
 
 	UPROPERTY(Category = "Movement", EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr <UProjectileMovementComponent> ProjectileMovementComponent;
@@ -49,9 +56,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "VFX")
 	UNiagaraSystem* TraceEffect;
 
+	UPROPERTY()
+	UNiagaraComponent* TraceEffectComponent;
+
 	/** single fire sound (bLoopedFireSound not set) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
 	USoundBase* HitSound;
+
+public:
+	// Called every frame
+	virtual void Tick(float DeltaTime) override;
 
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
@@ -59,16 +73,12 @@ protected:
 	UFUNCTION()
 	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit);
 
-public:
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
 private:
 	float MaxRange = 0;
 	FVector3d SpawnLocation;
 	float ProjectileDamage = 10;
 
-	UPROPERTY()
-	UNiagaraComponent* TraceEffectComponent;
-
+	// Mostly safeguards for piercing shots
+	TSet<TPair<TWeakObjectPtr<AActor>, FName>> HitBones;
+	TSet<TWeakObjectPtr<AActor>> HitActors;
 };

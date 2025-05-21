@@ -71,6 +71,9 @@ public:
         UAnimationAsset* DeathAnimation;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
+        bool DestroyHideMesh = false;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
         float DestroyDelay = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect")

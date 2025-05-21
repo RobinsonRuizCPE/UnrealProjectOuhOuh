@@ -7,6 +7,7 @@
 #include "ProjectileBase.h"
 #include "WeaponBase.generated.h"
 
+class UCrosshairWidgetBase;
 class USkeletalMeshComponent;
 class UDamageType;
 class UParticleSystem;
@@ -31,11 +32,13 @@ protected:
 
     virtual void BeginPlay() override;
 
+    virtual void Tick(float DeltaTime) override;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         float BaseDamage;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
-        float RateOfFire;
+        float BulletsPerSeconds;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon", meta = (ClampMin = 0.0f))
         float BulletSpread;
@@ -46,21 +49,25 @@ protected:
     UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         FVector TargetPoint;
 
-    FTimerHandle TimerHandle_TimeBetweenShots;
-
-    float LastFireTime;
-
-    // Derived from RateOfFire
-    float TimeBetweenShots;
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Appearance")
         USkeletalMeshComponent* MeshComp;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         TSubclassOf<UDamageType> DamageType;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+        TSubclassOf<UCrosshairWidgetBase> CrosshairWidgetClass;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
         TSubclassOf<AProjectileBase> ProjectileType;
+
+    // WeaponBase.h
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ChargedShot")
+        TSubclassOf<AProjectileBase> ChargedProjectileType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ChargedShot")
+        float ChargedShotCooldown = 3.0f;
 
     UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         FName MuzzleSocketName;
@@ -69,8 +76,9 @@ protected:
         UNiagaraSystem* MuzzleEffect;
 
     void Fire();
-    void SpawnProjectile() const;
-    void PlayFireSound();
+    void SpawnProjectile(TSubclassOf<AProjectileBase> projectile_class) const;
+    void ResetChargedShot();
+    void PlayFireSound(USoundBase* sound);
     void PlayFireEffects();
 
 
@@ -78,9 +86,13 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
         USoundBase* FireSound;
 
+    /** single fire sound (bLoopedFireSound not set) */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+        USoundBase* FireSoundChargedShot;
+
     /** finished burst sound (bLoopedFireSound set) */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
-        USoundCue* FireFinishSound;
+        USoundBase* ChargeShotReadySound;
 
     /** fire animations */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
@@ -89,7 +101,16 @@ protected:
 private:
     FVector2D AimDirection;
     FVector3d TargetDirection;
-    UNiagaraComponent* MuzzleEffectComponent;
+
+    FTimerHandle TimerHandle_TimeBetweenShots;
+    float LastFireTime;
+    float TimeBetweenShots;
+
+    bool b_is_charged_shot_ready = true;
+    FTimerHandle timer_handle_charged_shot;
+
+    UPROPERTY()
+    UCrosshairWidgetBase* CrosshairWidget;
 
 public:
 
@@ -99,7 +120,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Weapon")
         void StopFire();
 
+    UFUNCTION(BlueprintCallable, Category = "ChargedShot")
+    bool IsChargedShotReady() const { return b_is_charged_shot_ready; }
+
 private:
     void UpdateTargetPoint();
+    void UpdateCrosshair();
     AActor* FindRootOwnerActor() const;
 };
