@@ -21,7 +21,7 @@ AEnemyDrone::AEnemyDrone()
 
 void AEnemyDrone::Tick(float DeltaTime) {
     Super::Tick(DeltaTime);
-    auto const target_player = Cast<AVanquishCharacter>(Target);
+    auto const target_player = Cast<AVanquishCharacter>(PlayerTarget);
     if (!target_player) {
         return;
     }
@@ -109,10 +109,10 @@ float AEnemyDrone::GetAttackWaitTime() const
 
 void AEnemyDrone::FireProjectileFromNotify()
 {
-    if (!Target || bIsDead || !ProjectileClass)
+    if (!PlayerTarget || bIsDead || !ProjectileClass)
         return;
 
-    float distance = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
+    float distance = FVector::Distance(PlayerTarget->GetActorLocation(), GetActorLocation());
     if (distance > AttackRange)
         return;
 

@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "VanquishCharacterEnum.h"
 #include "WeaponBase.h"
+#include <Player/PlayerFollowSplineComponent.h>
 #include "VanquishCharacter.generated.h"
 
 class ASwordSlashProjectile;
@@ -18,6 +19,10 @@ class MYPROJECT_API AVanquishCharacter : public APawn
 public:
 	// Sets default values for this character's properties
 	AVanquishCharacter();
+
+	// Blueprint-callable methods (implemented in Blueprint)
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "VFX")
+	void TriggerDodgeSlowMoVFX(bool const trigger);
 
 protected:
 	// Called when the game starts or when spawned
@@ -46,7 +51,7 @@ public:
 	bool const GetDodgingStatusCanMoveAgain() const { return b_is_dodging_can_move_again; };
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	void SetDodgingStatusCanMoveAgain(bool new_status) { b_is_dodging_can_move_again = new_status; }
+		void SetDodgingStatusCanMoveAgain(bool new_status);
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	USkeletalMeshComponent* GetMesh() { return SkeletalMesh; }
@@ -57,6 +62,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	void const SetCurrentTransformAlongSpline(FTransform const current_transform) { mCurrentTransformAlongSpline = current_transform; };
 
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	FVector const& GetSwordSlashCurrentPos() const { return sword_slash_current_position; };
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	void const SetSwordSlashCurrentPos(FVector const current_pos) { sword_slash_current_position = current_pos; };
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	void DeactivateHitboxesFor(float const seconds);
+
+	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
+	void ReactivatePlayerHitboxes();
 	/**
 	Sword Attack Handling
 	*/
@@ -83,12 +99,17 @@ private:
 	void StopAnimMontage(UAnimMontage* AnimMontage);
 	UAnimMontage* GetCurrentMontage();
 
+	void ResetGlobalTimeDilation();
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UCapsuleComponent* CapsuleComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* SkeletalMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPlayerFollowSplineComponent* PlayerFollowSplineComponent;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation", meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* HitAnimMontage;
@@ -102,14 +123,21 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float mCurrentHealth;
 
+	UPROPERTY(VisibleAnywhere, Category = "Sword")
+	UStaticMeshComponent* SwordMesh;
+
 private:
 	// Dodge variables
 	bool b_is_dodging_can_move_again = true;
 	bool b_is_dodging = false;
+	bool b_has_triggered_dodge_slowmo = false;
+	FTimerHandle collision_restore_timer_handle;
+	FTimerHandle timer_handle_reset_slowmo;
 
 	//Attack variables
 	bool b_is_attacking = false;
 	bool b_attack_buffered = false;
+	FVector sword_slash_current_position;
 	SwordAttackType e_current_sword_attack = SwordAttackNone;
 	FTimerHandle combo_reset_timer_handle;
 	float combo_max_delay = 1.0f;

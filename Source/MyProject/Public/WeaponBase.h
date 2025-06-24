@@ -28,6 +28,9 @@ public:
     // Sets default values for this actor's properties
     AWeaponBase();
 
+    // Public so it can be reset for different reasons (dodge, ...)
+    void ResetChargedShot();
+
 protected:
 
     virtual void BeginPlay() override;
@@ -77,7 +80,6 @@ protected:
 
     void Fire();
     void SpawnProjectile(TSubclassOf<AProjectileBase> projectile_class) const;
-    void ResetChargedShot();
     void PlayFireSound(USoundBase* sound);
     void PlayFireEffects();
 

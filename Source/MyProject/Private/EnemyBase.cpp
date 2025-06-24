@@ -24,9 +24,13 @@ void AEnemyBase::BeginPlay()
     Super::BeginPlay();
     Health = MaxHealth;
 
-    UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(GetMesh()->GetOverlayMaterial(), nullptr);
-    GetMesh()->SetOverlayMaterial(MaterialInstance);
-    MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
+    if (UMaterialInterface* base_overlay = GetMesh()->GetOverlayMaterial())
+    {
+        UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(base_overlay, this);
+        GetMesh()->SetOverlayMaterial(MaterialInstance);
+        MaterialInstance->SetScalarParameterValue("HitEffectStrength", 0.0);
+    }
+
     SetActorEnableCollision(true);
 
     GetCharacterMovement()->bOrientRotationToMovement = false;
@@ -40,13 +44,13 @@ void AEnemyBase::Tick(float DeltaTime)
         return;
     }
 
-    if (Target == nullptr) {
-        Target = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+    if (PlayerTarget == nullptr) {
+        PlayerTarget = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
     }
 }
 
 void AEnemyBase::UpdateFollowPlayer(float delta_time) {
-    auto const target_player = Cast<AVanquishCharacter>(Target);
+    auto const target_player = Cast<AVanquishCharacter>(PlayerTarget);
     if (!target_player) return;
 
     FTransform player_spline_transform = target_player->GetCurrentTransformAlongSpline();
@@ -70,7 +74,7 @@ void AEnemyBase::UpdateFollowPlayer(float delta_time) {
 }
 
 void AEnemyBase::UpdateMoveRandomAdjacent(float delta_time) {
-    auto const target_player = Cast<AVanquishCharacter>(Target);
+    auto const target_player = Cast<AVanquishCharacter>(PlayerTarget);
     if (!target_player) return;
 
     FTransform player_spline_transform = target_player->GetCurrentTransformAlongSpline();
@@ -95,7 +99,7 @@ void AEnemyBase::UpdateMoveRandomAdjacent(float delta_time) {
 }
 
 void AEnemyBase::UpdateRotation() {
-    FVector TargetLocation = Target->GetActorLocation();
+    FVector TargetLocation = PlayerTarget->GetActorLocation();
     FVector SelfLocation = GetActorLocation();
     FVector Direction = (TargetLocation - SelfLocation).GetSafeNormal();
 
@@ -106,7 +110,7 @@ void AEnemyBase::UpdateRotation() {
 
 void AEnemyBase::UpdateWaitingState(float delta_time)
 {
-    auto const target_player = Cast<AVanquishCharacter>(Target);
+    auto const target_player = Cast<AVanquishCharacter>(PlayerTarget);
     if (!target_player)
     {
         return;
@@ -179,10 +183,10 @@ void AEnemyBase::PickRandomAdjacentLocation()
 
 void AEnemyBase::Attack()
 {
-    if (!Target || bIsDead)
+    if (!PlayerTarget || bIsDead)
         return;
 
-    float distance = FVector::Distance(Target->GetActorLocation(), GetActorLocation());
+    float distance = FVector::Distance(PlayerTarget->GetActorLocation(), GetActorLocation());
     if (distance > AttackRange) {
         BeginWaitState(0.5f);
         return;
@@ -262,9 +266,12 @@ void AEnemyBase::Die()
     }
 
     // Play death animation and destroy actor after a delay
-    GetMesh()->PlayAnimation(DeathAnimation, false);
+    if (DeathAnimation) {
+        GetMesh()->PlayAnimation(DeathAnimation, false);
+    }
+
     if (DeathEffect) {
-        DeathEffectComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(DeathEffect, GetMesh(), "Core", FVector{}, FRotator{}, EAttachLocation::Type::SnapToTarget, true, true, ENCPoolMethod::None, true);
+        DeathEffectComponent = UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), DeathEffect,GetActorLocation());
         //DeathEffectComponent->SetFloatParameter(FName("Delay"), 0.1f);
         DeathEffectComponent->SetVisibility(true, true);
     }
@@ -273,9 +280,10 @@ void AEnemyBase::Die()
         GetMesh()->SetVisibility(false);
     }
     
-    FTimerHandle TimerHandle;
-    GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
-    GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
+    DestroyEnemy();
+    //FTimerHandle TimerHandle;
+    //GetWorldTimerManager().SetTimer(TimerHandle, this, &AEnemyBase::DestroyEnemy, DestroyDelay);
+    //GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
 }
 
 void AEnemyBase::DestroyEnemy()

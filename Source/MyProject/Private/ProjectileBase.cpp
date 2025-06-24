@@ -79,16 +79,26 @@ void AProjectileBase::BeginPlay()
 }
 
 void AProjectileBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit) {
+    // Do not hit the same boneless-actor ( :p ) twice
+    if (Hit.BoneName.IsNone()) {
+        if (HitActors.Contains(OtherActor))
+            return;
+
+        HitActors.Add(OtherActor);
+        HandleProjectileImpact(OtherActor, Hit.ImpactPoint, Hit);
+        return;
+    }
+
+    // Do not hit the same bone twice
+    auto const hit_key = TPair<TWeakObjectPtr<AActor>, FName>(OtherActor, Hit.BoneName);
+    if (HitBones.Contains(hit_key))
+        return;
+
+    HitBones.Add(hit_key);
     HandleProjectileImpact(OtherActor, Hit.ImpactPoint, Hit);
 }
 
 void AProjectileBase::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
-    //Shortcut here to avoid dealing with the piercing shot comparaison, technically useless
-    if (!PiercingShot) {
-        HandleProjectileImpact(OtherActor, SweepResult.ImpactPoint, SweepResult);
-        return;
-    }
-
     // Ghost hit result for god knows why ???
     if (SweepResult.Location.IsNearlyZero(0.01)) {
         return;
@@ -124,6 +134,7 @@ void AProjectileBase::Tick(float DeltaTime) {
 
 void AProjectileBase::HandleProjectileImpact(AActor* OtherActor, FVector const& ImpactPoint, const FHitResult& HitResult)
 {
+
     if (HitEffect) {
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), HitEffect, ImpactPoint);
     }
@@ -136,7 +147,17 @@ void AProjectileBase::HandleProjectileImpact(AActor* OtherActor, FVector const& 
         TraceEffectComponent->Deactivate();
     }
 
-    UGameplayStatics::ApplyPointDamage(OtherActor, ProjectileDamage, ProjectileMovementComponent->Velocity, HitResult, GetInstigatorController(), this, UDamageType::StaticClass());
+    auto const damaged = UGameplayStatics::ApplyPointDamage(OtherActor, ProjectileDamage, ProjectileMovementComponent->Velocity, HitResult, GetInstigatorController(), this, UDamageType::StaticClass());
+    if (FMath::IsNearlyZero(damaged)) {
+        // -- DID NOT TAKE DAMAGE (dodge, ... ) CLEANUP HIT CONTAINERS --
+        if (HitResult.BoneName.IsNone()) {
+            HitActors.Remove(OtherActor);
+        }
+        else {
+            auto const hit_key = TPair<TWeakObjectPtr<AActor>, FName>(OtherActor, HitResult.BoneName);
+            HitBones.Remove(hit_key);
+        }
+    }
 
     if (!PiercingShot) {
         Destroy();

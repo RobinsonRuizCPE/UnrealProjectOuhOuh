@@ -5,6 +5,7 @@
 
 #include <Player/SwordAttack/SwordSlashProjectile.h>
 #include "Components/CapsuleComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -20,13 +21,19 @@ AVanquishCharacter::AVanquishCharacter()
 
 	SkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMesh"));
 	SkeletalMesh->SetupAttachment(RootComponent); // or CapsuleComponent if needed
+
+	SwordMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SwordEffectMesh"));
+	SwordMesh->SetupAttachment(GetMesh());
+	SwordMesh->SetVisibility(false);
+	SwordMesh->SetupAttachment(GetMesh(), TEXT("WeaponLeftHandSocket"));
+
+	PlayerFollowSplineComponent = CreateDefaultSubobject<UPlayerFollowSplineComponent>(TEXT("PlayerFollowSplineComponent"));
 }
 
 // Called when the game starts or when spawned
 void AVanquishCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
 	UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(GetMesh()->GetOverlayMaterial(), nullptr);
 	GetMesh()->SetOverlayMaterial(MaterialInstance);
 	MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
@@ -87,7 +94,7 @@ void AVanquishCharacter::TriggerSwordAttack()
 
 		if (slash)
 		{
-			slash->InitializeSlash(start, dir, 0.25f, 2000.f);
+			slash->InitializeRandomArcSlash(start, dir, 0.25f, 2000.f);
 		}
 	}
 
@@ -122,6 +129,9 @@ void AVanquishCharacter::StartSwordAttack(SwordAttackType const attack_to_start)
 {
 	b_is_attacking = true;
 	e_current_sword_attack = attack_to_start;
+	if (SwordMesh) {
+		SwordMesh->SetVisibility(true);
+	}
 
 	// Debug
 	if (GEngine)
@@ -134,6 +144,9 @@ void AVanquishCharacter::StartSwordAttack(SwordAttackType const attack_to_start)
 void AVanquishCharacter::EndSwordAttack()
 {
 	b_is_attacking = false;
+	if (SwordMesh) {
+		SwordMesh->SetVisibility(false);
+	}
 
 	// If input was buffered and not at final attack, trigger next
 	if (b_attack_buffered && e_current_sword_attack != SwordAttack2)
@@ -149,12 +162,46 @@ void AVanquishCharacter::EndSwordAttack()
 }
 
 float AVanquishCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) {
+	// If hitboxes are disabled (i.e., in dodge state)
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,                     // Key (use -1 for new line every time)
+			0.1f,                   // Duration (in seconds)
+			FColor::Green,          // Color
+			TEXT("Your debug message here")
+		);
+	}
+	if (!b_is_dodging_can_move_again)
+	{
+		if (!b_has_triggered_dodge_slowmo)
+		{
+			b_has_triggered_dodge_slowmo = true;
+			UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.1f);
+			TriggerDodgeSlowMoVFX(true);
+			GetWorldTimerManager().ClearTimer(timer_handle_reset_slowmo);
+			GetWorldTimerManager().SetTimer(timer_handle_reset_slowmo, this, &AVanquishCharacter::ResetGlobalTimeDilation, 0.05f, false);
+
+			TArray<AActor*> owned_actors;
+			GetAttachedActors(owned_actors);
+			for (AActor* actor : owned_actors)
+			{
+				AWeaponBase* weapon = Cast<AWeaponBase>(actor);
+				if (weapon)
+				{
+					weapon->ResetChargedShot();
+				}
+			}
+		}
+
+		return 0.f;
+	}
 
 	ToggleGlow(true);
 	FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &AVanquishCharacter::ToggleGlow, false);
-	GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 0.1f);
-
+	GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 1.f);
 	PlayAnimMontage(HitAnimMontage);
+	DeactivateHitboxesFor(1.f);
 
 	mCurrentHealth -= DamageAmount;
 	if (mCurrentHealth <= 0.0f)
@@ -168,7 +215,8 @@ float AVanquishCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Dam
 void AVanquishCharacter::ToggleGlow(bool const activation) {
 	auto const overlay_instance = Cast<UMaterialInstanceDynamic>(GetMesh()->GetOverlayMaterial());
 	overlay_instance->SetScalarParameterValue(FName{ "HitEffectStrength" }, activation ? 1.0f : 0.0f);
-	GetWorldTimerManager().ClearTimer(TimerHandle_TimeForHitGlow);
+
+	//GetWorldTimerManager().ClearTimer(TimerHandle_TimeForHitGlow);
 }
 
 
@@ -236,3 +284,26 @@ class UAnimMontage* AVanquishCharacter::GetCurrentMontage()
 
 	return nullptr;
 }
+
+void AVanquishCharacter::SetDodgingStatusCanMoveAgain(bool const new_status) {
+	b_has_triggered_dodge_slowmo = false;
+	b_is_dodging_can_move_again = new_status; 
+}
+
+
+void AVanquishCharacter::DeactivateHitboxesFor(float const seconds) {
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision); // Reset per-dodge slowmo trigger
+
+	GetWorldTimerManager().ClearTimer(collision_restore_timer_handle);
+	GetWorldTimerManager().SetTimer(collision_restore_timer_handle, this, &AVanquishCharacter::ReactivatePlayerHitboxes, seconds, false);
+}
+
+void AVanquishCharacter::ReactivatePlayerHitboxes() {
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndProbe);
+}
+
+void AVanquishCharacter::ResetGlobalTimeDilation() {
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
+	TriggerDodgeSlowMoVFX(false);
+}
+

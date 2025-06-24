@@ -45,7 +45,7 @@ protected:
     void UpdateWaitingState(float delta_time);
 
     void SetNextAction(EEnemyState const next_action) { mCurrentState = next_action; };
-    void DecideNextAction();
+    virtual void DecideNextAction();
     void PickRandomAdjacentLocation();
 
 private:
@@ -81,7 +81,7 @@ public:
 
 protected:
     UFUNCTION(BlueprintCallable, Category = "Weapon")
-    void Attack();
+    virtual void Attack();
 
     virtual void PerformAttack();
     virtual float GetAttackWaitTime() const { return 1.0f; }
@@ -91,7 +91,7 @@ protected:
     void FinishWaitState();
 
 protected:
-    void Die();
+    virtual void Die();
 
     void DestroyEnemy();
 
@@ -112,8 +112,9 @@ protected:
         bool bIsDead = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
-        class APawn* Target;
+    class APawn* PlayerTarget;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
     EEnemyState mCurrentState = EEnemyState::FollowPlayer;
 
     FTimerHandle WaitTimerHandle;

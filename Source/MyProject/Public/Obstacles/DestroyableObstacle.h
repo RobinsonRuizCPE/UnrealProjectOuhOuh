@@ -44,6 +44,9 @@ protected:
 
     void OptimizePostDestruction();
 
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Death")
+    void OnDeathOptimizationStarts();
+
 protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components")
@@ -66,6 +69,9 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chaos")
         UFieldSystemComponent* FieldSystem;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+        bool SwordOnly = false;
 
 private:
     bool bHasBeenDestroyed = false;

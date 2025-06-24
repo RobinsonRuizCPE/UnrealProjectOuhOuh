@@ -1,6 +1,7 @@
 #include "Obstacles/DestroyableObstacle.h"
 
 #include <ProjectileBase.h>
+#include <Player/SwordAttack/SwordSlashProjectile.h>
 
 #include "Field/FieldSystem.h"
 #include "Field/FieldSystemComponent.h"
@@ -49,6 +50,10 @@ void ADestroyableObstacle::Tick(float DeltaTime)
 
 void ADestroyableObstacle::OnMeshHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
+    if (SwordOnly && !Cast<ASwordSlashProjectile>(OtherActor)) {
+        return;
+    }
+
     if (!bHasBeenDestroyed)
     {
         HandleDestruction(Hit.ImpactPoint);
@@ -58,6 +63,10 @@ void ADestroyableObstacle::OnMeshHit(UPrimitiveComponent* HitComp, AActor* Other
 
 void ADestroyableObstacle::OnMeshOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+    if (SwordOnly && !Cast<ASwordSlashProjectile>(OtherActor)) {
+        return;
+    }
+
     if (!bHasBeenDestroyed)
     {
         HandleDestruction(SweepResult.ImpactPoint);
@@ -131,6 +140,7 @@ void ADestroyableObstacle::HandleDestruction(FVector impact_location)
 
 void ADestroyableObstacle::OptimizePostDestruction()
 {
+    OnDeathOptimizationStarts();
     FTimerHandle optimization_timer;
     GetWorldTimerManager().SetTimer(optimization_timer,
         [this]() {

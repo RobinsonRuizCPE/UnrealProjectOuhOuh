@@ -112,6 +112,10 @@ void AWeaponBase::PlayFireSound(USoundBase* sound) {
 }
 
 void AWeaponBase::ResetChargedShot() {
+    if (b_is_charged_shot_ready) {
+        return;
+    }
+
     PlayFireSound(ChargeShotReadySound);
     b_is_charged_shot_ready = true;
 }

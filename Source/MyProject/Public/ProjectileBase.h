@@ -31,7 +31,6 @@ public:
 private: 
 	float const ComputeTraveledDistance();
 
-	void HandleProjectileImpact(AActor* OtherActor, FVector const& ImpactPoint, const FHitResult& HitResult);
 
 
 protected:
@@ -72,6 +71,8 @@ public:
 
 	UFUNCTION()
 	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit);
+
+	void HandleProjectileImpact(AActor* OtherActor, FVector const& ImpactPoint, const FHitResult& HitResult);
 
 private:
 	float MaxRange = 0;
