@@ -1,8 +1,10 @@
 #include "WeaponBase.h"
+#include "VanquishCharacter.h"
 #include <UI/CrosshairWidgetBase.h>
 
 #include "DrawDebugHelpers.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Particles/ParticleSystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Particles/ParticleSystemComponent.h"
@@ -37,6 +39,8 @@ void AWeaponBase::BeginPlay()
 {
     Super::BeginPlay();
     TimeBetweenShots = 1 / BulletsPerSeconds;
+    ProjectileVelocity = ProjectileVelocityFactorAtStart;
+    VanquishRootOwner = Cast<AVanquishCharacter>(FindRootOwnerActor());
     if (CrosshairWidgetClass)
     {
         APlayerController* pc = GetWorld()->GetFirstPlayerController();
@@ -52,6 +56,7 @@ void AWeaponBase::BeginPlay()
 }
 
 void AWeaponBase::Tick(float DeltaTime) {
+    Super::Tick(DeltaTime);
     UpdateTargetPoint();
     UpdateCrosshair();
 }
@@ -63,10 +68,32 @@ void AWeaponBase::Fire()
         return;
     }
 
+    if (VanquishRootOwner && !VanquishRootOwner->HasAbilityFlag(ECharacterAbilityFlags::CanShoot)) {
+        return;
+    }
+
+    if (pWorld->TimeSeconds - LastFireTime < 0) {
+        return;
+    }
+
+    float first_shot_delay = FMath::Max(LastFireTime + TimeBetweenShots - pWorld->TimeSeconds, 0.0f);
+    if (b_is_charged_shot_ready && ChargedProjectileType) {
+        SpawnProjectile(ChargedProjectileType);
+        PlayFireEffects();
+        PlayFireSound(FireSoundChargedShot);
+        b_is_charged_shot_ready = false;
+        LastFireTime = pWorld->TimeSeconds + 0.3f;
+        return;
+    }
+    else {
+        GetWorldTimerManager().ClearTimer(timer_handle_charged_shot); // reset cooldown if shot before ready
+    }
+
     // Will be used to avoid spam
     LastFireTime = pWorld->TimeSeconds;
 
     SpawnProjectile(ProjectileType);
+    HeatSystem->AddHeatModifier(HeatAmount, HeatDuration, HeatDecayType, true);
     PlayFireEffects();
     PlayFireSound(FireSound);
 }
@@ -81,11 +108,21 @@ void AWeaponBase::SpawnProjectile(TSubclassOf<AProjectileBase> projectile_class)
         return;
     }
 
-    auto const projectile_velocity = TargetDirection * 1000.f;
+    // Create a random spread direction within a cone
+    FVector spread_direction = TargetDirection;
+    if (BulletSpread > 0.0f) {
+        FRotator spread_rot = UKismetMathLibrary::RandomRotator(true);
+        spread_rot.Pitch *= BulletSpread;
+        spread_rot.Yaw *= BulletSpread;
+        spread_rot.Roll = 0.0f;
+        spread_direction = spread_rot.RotateVector(TargetDirection).GetSafeNormal();
+    }
+
+    auto const projectile_velocity = spread_direction * (ProjectileVelocity + ProjectileVelocitySpeedAlongSpline);
     auto const spawn_location = MeshComp->GetSocketLocation(MuzzleSocketName);
     FActorSpawnParameters SpawnParams;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    auto const spawned_projectile = pWorld->SpawnActor<AProjectileBase>(projectile_class, spawn_location, TargetDirection.ToOrientationRotator(), SpawnParams);
+    auto const spawned_projectile = pWorld->SpawnActor<AProjectileBase>(projectile_class, spawn_location, spread_direction.ToOrientationRotator(), SpawnParams);
     if (!spawned_projectile) {
         return;
     }
@@ -107,7 +144,7 @@ void AWeaponBase::PlayFireSound(USoundBase* sound) {
         return;
     }
 
-    auto sound_location = MeshComp->GetSocketLocation(MuzzleSocketName);
+    auto sound_location = GetActorLocation();
     UGameplayStatics::PlaySoundAtLocation(pWorld, sound, sound_location);
 }
 
@@ -119,6 +156,12 @@ void AWeaponBase::ResetChargedShot() {
     PlayFireSound(ChargeShotReadySound);
     b_is_charged_shot_ready = true;
 }
+
+void AWeaponBase::SetHeatSystemComponent(UHeatSystemComponent* heat_system) { 
+    HeatSystem = heat_system;
+    HeatSystem->OnHeatLevelChanged.AddDynamic(this, &AWeaponBase::HandleHeatLevelChanged);
+}
+
 
 void AWeaponBase::PlayFireEffects()
 {
@@ -141,34 +184,51 @@ void AWeaponBase::PlayFireEffects()
 
 void AWeaponBase::StartFire()
 {
+    StartFireImpl();
+}
+
+void AWeaponBase::StartFireImpl()
+{
     UWorld* pWorld = GetWorld();
     if (!pWorld) {
         return;
     }
 
+    IsFiring = true;
     float first_shot_delay = FMath::Max(LastFireTime + TimeBetweenShots - pWorld->TimeSeconds, 0.0f);
-    if (b_is_charged_shot_ready && ChargedProjectileType) {
-        SpawnProjectile(ChargedProjectileType);
-        PlayFireEffects();
-        PlayFireSound(FireSoundChargedShot);
-        b_is_charged_shot_ready = false;
-        first_shot_delay += TimeBetweenShots + 0.3f;
-    }
-    else {
-        GetWorldTimerManager().ClearTimer(timer_handle_charged_shot); // reset cooldown if shot before ready
-    }
-
     GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AWeaponBase::Fire, TimeBetweenShots, true, first_shot_delay);
 }
 
+void AWeaponBase::StartFireAtTarget(AActor* target) {
+    StartFireAtTargetImpl(target);
+}
+
+void AWeaponBase::StartFireAtTargetImpl(AActor* target)
+{
+    SelectedTarget = target;
+    StartFireImpl();
+}
+
+
 void AWeaponBase::StopFire()
 {
+    StopFireImpl();
     GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
     GetWorldTimerManager().SetTimer(timer_handle_charged_shot, this, &AWeaponBase::ResetChargedShot, ChargedShotCooldown, false);
 }
 
+void AWeaponBase::StopFireImpl() {
+    IsFiring = false;
+}
+
 void AWeaponBase::UpdateTargetPoint()
 {
+    if (SelectedTarget) {
+        TargetPoint = SelectedTarget->GetActorLocation();
+        TargetDirection = (TargetPoint - GetActorLocation()).GetSafeNormal();
+        return;
+    }
+
     FVector crosshair_world_pos, crosshair_world_dir;
     APlayerController* pc = GetWorld()->GetFirstPlayerController();
     if (!pc || !pc->DeprojectMousePositionToWorld(crosshair_world_pos, crosshair_world_dir))
@@ -249,6 +309,20 @@ void AWeaponBase::UpdateCrosshair()
         auto const charged_shot_readyness = b_is_charged_shot_ready ? 1.f : GetWorldTimerManager().GetTimerElapsed(timer_handle_charged_shot) / ChargedShotCooldown;
         crosshair->UpdateChargeCrosshair(charged_shot_readyness);
         crosshair->UpdateCrosshairPosition(scaled_mouse_pos);
+    }
+}
+
+void AWeaponBase::HandleHeatLevelChanged(int32 new_heat_level, bool is_increase)
+{
+    // Recalculate TimeBetweenShots based on heat level
+    TimeBetweenShots = 1 / (BulletsPerSeconds * (new_heat_level + 1));
+    ProjectileVelocity = ProjectileVelocityFactorAtStart * (new_heat_level + 1);
+
+    if (IsFiring)
+    {
+        // Restart the timer with the updated rate
+        GetWorldTimerManager().ClearTimer(TimerHandle_TimeBetweenShots);
+        GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &AWeaponBase::Fire, TimeBetweenShots, true);
     }
 }
 

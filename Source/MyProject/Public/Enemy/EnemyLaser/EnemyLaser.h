@@ -119,6 +119,7 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, Category = "Laser|Audio")
         USoundAttenuation* ChargeSoundAttenuation;
+
 private:
     void UpdatelaserTargets();
 

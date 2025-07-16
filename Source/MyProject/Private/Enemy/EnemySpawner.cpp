@@ -2,6 +2,7 @@
 
 
 #include "Enemy/EnemySpawner.h"
+#include "Components/ActorComponent.h"
 
 #include "Kismet/GameplayStatics.h"
 
@@ -18,15 +19,19 @@ AEnemySpawner::AEnemySpawner()
 	CollisionSphere->SetCollisionProfileName("EnemyProjectile");
 	SetRootComponent(CollisionSphere);
 
-	SpawnLocation = CreateDefaultSubobject<USceneComponent>(TEXT("SpawnLocation"));
-	SpawnLocation->SetupAttachment(RootComponent); // or whichever component is appropriate
-	SpawnLocation->SetRelativeLocation(FVector::ZeroVector); // Optional: give it a default offset
+	auto first_spawn_point = CreateDefaultSubobject<UArrowComponent>(TEXT("SpawnLocation_Base"));
+	first_spawn_point->SetupAttachment(RootComponent); // or whichever component is appropriate
+	first_spawn_point->SetRelativeLocation(FVector::ZeroVector); // Optional: give it a default offset
+	SpawnLocation.Add(first_spawn_point);
 }
 
 // Called when the game starts or when spawned
 void AEnemySpawner::BeginPlay()
 {
 	Super::BeginPlay();
+	TInlineComponentArray<UArrowComponent*> arrow_components(this);
+	SpawnLocation = arrow_components; // Copy to your array
+	CollisionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
 }
 
 // Called every frame
@@ -37,17 +42,15 @@ void AEnemySpawner::Tick(float DeltaTime)
 
 void AEnemySpawner::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit) {
 	SpawnEnemyAtLocation();
-	Destroy();
 }
 
 void AEnemySpawner::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	SpawnEnemyAtLocation();
-	Destroy();
 }
 
 void AEnemySpawner::SpawnEnemyAtLocation()
 {
-    if (!EnemyType || !SpawnLocation)
+    if (!EnemyType || !SpawnLocation.Num())
     {
         return;
     }
@@ -58,11 +61,38 @@ void AEnemySpawner::SpawnEnemyAtLocation()
         return;
     }
 
-    FVector spawn_position = SpawnLocation->GetComponentLocation();
-    FRotator spawn_rotation = SpawnLocation->GetComponentRotation();
-
-    FActorSpawnParameters spawn_params;
-    spawn_params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	world->SpawnActor<AEnemyBase>(EnemyType, spawn_position, spawn_rotation, spawn_params);
+	current_spawn_index = 0;
+	SpawnNextEnemy();
 }
+
+void AEnemySpawner::SpawnNextEnemy() {
+	if (current_spawn_index >= SpawnLocation.Num())
+	{
+		if (InfiniteSpawn) { current_spawn_index = 0; }
+		else { Destroy(); return; }
+	}
+
+	UWorld* world = GetWorld();
+	if (!world || !EnemyType) return;
+
+	USceneComponent* spawn_point = SpawnLocation[current_spawn_index];
+	if (spawn_point)
+	{
+		FVector spawn_position = spawn_point->GetComponentLocation();
+		FRotator spawn_rotation = spawn_point->GetComponentRotation();
+
+		FActorSpawnParameters spawn_params;
+		spawn_params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		world->SpawnActor<AEnemyBase>(EnemyType, spawn_position, spawn_rotation, spawn_params);
+	}
+
+	++current_spawn_index;
+
+	if (current_spawn_index < SpawnLocation.Num())
+	{
+		world->GetTimerManager().SetTimer(spawn_timer_handle, this, &AEnemySpawner::SpawnNextEnemy, SpawnDelay, false);
+	}
+}
+
 

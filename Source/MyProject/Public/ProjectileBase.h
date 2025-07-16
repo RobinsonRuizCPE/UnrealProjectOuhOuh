@@ -44,7 +44,13 @@ protected:
 	float CollisionRadius = 16.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	float ProjectileDamage = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	bool PiercingShot = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.00001", AllowPrivateAccess = "true"))
+	float VelocityFactor = 1.f;
 
 	UPROPERTY(Category = "Movement", EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr <UProjectileMovementComponent> ProjectileMovementComponent;
@@ -77,7 +83,6 @@ public:
 private:
 	float MaxRange = 0;
 	FVector3d SpawnLocation;
-	float ProjectileDamage = 10;
 
 	// Mostly safeguards for piercing shots
 	TSet<TPair<TWeakObjectPtr<AActor>, FName>> HitBones;

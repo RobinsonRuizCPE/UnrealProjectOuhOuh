@@ -42,10 +42,17 @@ protected:
 
     void HandleDestruction(FVector impact_location = FVector::ZeroVector);
 
+    UFUNCTION(BlueprintImplementableEvent, Category = "Obstacle")
+    void OnMeshDestroyed();
+
     void OptimizePostDestruction();
 
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Death")
     void OnDeathOptimizationStarts();
+
+private:
+    void ToggleGlow(bool const activation, FLinearColor const color);
+
 
 protected:
 
@@ -62,7 +69,7 @@ protected:
         USoundBase* DestructionSound;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-        float DamageToDeal = 20.0f;
+        float DamageToDeal = 0.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Optimization")
         float DelayBeforeOptimize = 7.0f;
@@ -73,6 +80,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
         bool SwordOnly = false;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+        uint8 HeatLevelMin = 0;
+
 private:
     bool bHasBeenDestroyed = false;
+    FTimerHandle TimerHandle_TimeForHitGlow;
 };

@@ -4,12 +4,30 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "NiagaraSystem.h"
+#include "NiagaraComponent.h"
+
 #include "VanquishCharacterEnum.h"
 #include "WeaponBase.h"
+#include <Player/HeatSystemComponent.h>
 #include <Player/PlayerFollowSplineComponent.h>
+
+
 #include "VanquishCharacter.generated.h"
 
 class ASwordSlashProjectile;
+
+UENUM(BlueprintType, meta = (Bitflags))
+enum class ECharacterAbilityFlags : uint8
+{
+	None = 0 UMETA(Hidden),
+	CanMove = 1 << 0,
+	CanShoot = 1 << 1,
+	CanMeleeAttack = 1 << 2,
+	CanDodge = 1 << 3,
+	CanHeatAttack = 1 << 4,
+};
+ENUM_CLASS_FLAGS(ECharacterAbilityFlags)
 
 UCLASS()
 class MYPROJECT_API AVanquishCharacter : public APawn
@@ -45,13 +63,7 @@ public:
 	bool const GetDodgingStatus() const { return b_is_dodging; };
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	void SetDodgingStatus(bool new_status) { b_is_dodging = new_status; }
-
-	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-	bool const GetDodgingStatusCanMoveAgain() const { return b_is_dodging_can_move_again; };
-
-	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
-		void SetDodgingStatusCanMoveAgain(bool new_status);
+	void SetDodgingStatus(bool new_status);
 
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	USkeletalMeshComponent* GetMesh() { return SkeletalMesh; }
@@ -92,14 +104,56 @@ public:
 	UFUNCTION(BlueprintCallable, Category = AVanquishCharacter)
 	float const GetCurrentHealtPercentage() const { return (mCurrentHealth/mMaxHealth); };
 
+	UFUNCTION(BlueprintCallable, Category = "Heat")
+	UHeatSystemComponent* GetHeatSystem() const { return HeatSystem; }
+
+	UFUNCTION(BlueprintCallable, Category = "Heat")
+	int GetHeatSystemLevel() const { return HeatSystem->GetGlobalHeatLevel() ; }
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	bool HasAbilityFlag(ECharacterAbilityFlags flag) const {
+		return (static_cast<ECharacterAbilityFlags>(character_ability_flags) & flag) != ECharacterAbilityFlags::None;
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void RemoveAbilityFlags(const TArray<ECharacterAbilityFlags>& flags)
+	{
+		for (ECharacterAbilityFlags flag : flags)
+		{
+			character_ability_flags &= ~static_cast<int32>(flag);
+		}
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void AddAbilityFlags(const TArray<ECharacterAbilityFlags>& flags)
+	{
+		for (ECharacterAbilityFlags flag : flags)
+		{
+			character_ability_flags |= static_cast<int32>(flag);
+		}
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ClearAllAbilityFlags() {
+		character_ability_flags = 0;
+	}
+
 private:
 	void Die();
+
+	UFUNCTION()
+	void SwordSlashEnded();
 
 	float PlayAnimMontage(UAnimMontage* AnimMontage, float InPlayRate = 1.f, FName StartSectionName = NAME_None);
 	void StopAnimMontage(UAnimMontage* AnimMontage);
 	UAnimMontage* GetCurrentMontage();
 
 	void ResetGlobalTimeDilation();
+
+	UFUNCTION()
+	void HandleHeatLevelChanged(int32 new_heat_value, bool is_increase);
+
+	void PlayBoneEffect(UNiagaraSystem* effect, FName bone_name, bool force_refresh);
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
@@ -126,9 +180,32 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Sword")
 	UStaticMeshComponent* SwordMesh;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Heat")
+	UHeatSystemComponent* HeatSystem;
+
+
+	UPROPERTY(EditDefaultsOnly, Category = "Heat|VFX")
+	UNiagaraSystem* HeatUpVFX;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Heat|VFX")
+	UNiagaraSystem* HeatDownVFX;
+
+	UPROPERTY()
+	TMap<FName, UNiagaraComponent*> ActiveBoneEffects;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Abilities", meta = (Bitmask, BitmaskEnum = "ECharacterAbilityFlags"))
+	int32 character_ability_flags = static_cast<int32>(ECharacterAbilityFlags::CanMove |
+		ECharacterAbilityFlags::CanShoot |
+		ECharacterAbilityFlags::CanMeleeAttack |
+		ECharacterAbilityFlags::CanDodge |
+		ECharacterAbilityFlags::CanHeatAttack
+	);
+
 private:
+	/** World-space markers for laser path */
+	TArray<AWeaponBase*> Weapons;
+
 	// Dodge variables
-	bool b_is_dodging_can_move_again = true;
 	bool b_is_dodging = false;
 	bool b_has_triggered_dodge_slowmo = false;
 	FTimerHandle collision_restore_timer_handle;

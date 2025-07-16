@@ -38,18 +38,28 @@ public:
 
 protected:
     // Returns the distance from player
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "EnemyBehavior")
+    void UpdateFollowPlayerNavMesh(float DeltaTime);
+
+    UFUNCTION(BlueprintCallable)
     void UpdateFollowPlayer(float DeltaTime);
+
     void UpdateMoveRandomAdjacent(float delta_time);
     void UpdateRotation();
 
     void UpdateWaitingState(float delta_time);
 
+    UFUNCTION(BlueprintCallable)
+    bool CheckDistanceToGoal(FVector const goal_pos, float distance_to_goal);
+
     void SetNextAction(EEnemyState const next_action) { mCurrentState = next_action; };
+
+    UFUNCTION(BlueprintCallable)
     virtual void DecideNextAction();
+
     void PickRandomAdjacentLocation();
 
-private:
-
+    UFUNCTION(BlueprintCallable)
     FVector const ComputeAxisSeparatedOffsetVelocity(FVector current_location, FVector player_position, FVector player_forward, FVector2D relative_offset, float follow_distance, float forward_speed_max, float offset_speed_max) const;
 
 
@@ -60,6 +70,12 @@ public:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
         float AttackRange = 1500.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
+    float FollowDistance = 700.f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI")
+    float ForwardCorrectionSpeed = 1500.f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
         float MaxHealth = 100.0f;
@@ -124,8 +140,6 @@ private:
     bool IsFiring = false;
 
     UNiagaraComponent* DeathEffectComponent;
-    float FollowDistance = 700.f;
-    float ForwardCorrectionSpeed = 1500.f;
     float OffsetMovementSpeed = 400.f;
     FTimerHandle TimerHandle_TimeBetweenShots;
     FTimerHandle TimerHandle_TimeForHitGlow;

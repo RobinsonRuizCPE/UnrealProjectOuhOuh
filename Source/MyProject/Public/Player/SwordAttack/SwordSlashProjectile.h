@@ -18,6 +18,8 @@ enum class eSlashMethod {
 	None
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSlashDestroyed);
+
 UCLASS()
 class MYPROJECT_API ASwordSlashProjectile : public AProjectileBase
 {
@@ -37,7 +39,8 @@ public:
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnSlashDestroyed OnSlashDestroyed;
 
 	FVector GetLerpPositionCache() const { return lerped_position_cache; }
 

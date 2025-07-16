@@ -31,7 +31,7 @@ void AEnemyDrone::Tick(float DeltaTime) {
     switch (mCurrentState)
     {
     case EEnemyState::FollowPlayer:
-        UpdateFollowPlayer(DeltaTime);
+        UpdateFollowPlayerNavMesh(DeltaTime);
         break;
     case EEnemyState::MoveRandomAdjacent:
         UpdateMoveRandomAdjacent(DeltaTime);
@@ -158,7 +158,8 @@ void AEnemyDrone::SpawnAntennaDebris(FTransform const& bone_transform, const FVe
     FTimerHandle Timer;
     GetWorld()->GetTimerManager().SetTimer(Timer, [Debris]()
         {
-            if (Debris)
-            Debris->DestroyComponent();
+            if (Debris) {
+                Debris->DestroyComponent();
+            }
         }, 3.0f, false);
 }

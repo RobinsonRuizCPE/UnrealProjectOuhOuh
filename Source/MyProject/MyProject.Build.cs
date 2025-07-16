@@ -9,7 +9,7 @@ public class MyProject : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		CppStandard = CppStandardVersion.Cpp20;
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "Niagara", "GameplayTasks", "AIModule", "NavigationSystem", "GeometryCollectionEngine", "FieldSystemEngine", "ProceduralMeshComponent" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "Niagara", "GameplayTasks", "AIModule", "NavigationSystem", "GeometryCollectionEngine", "FieldSystemEngine", "ProceduralMeshComponent", "Landscape" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "Engine" });
 

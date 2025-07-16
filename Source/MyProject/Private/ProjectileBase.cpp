@@ -34,8 +34,7 @@ AProjectileBase::AProjectileBase()
 
 void AProjectileBase::SetProjectileTrajectory(FVector const& world_direction)
 {
-    //SetActorRotation(FRotator::ZeroRotator);
-    ProjectileMovementComponent->Velocity = world_direction * 10;
+    ProjectileMovementComponent->Velocity = world_direction * VelocityFactor;
     if (TraceEffectComponent)
     {
         FVector world_dir = ProjectileMovementComponent->Velocity.GetSafeNormal();
@@ -53,6 +52,7 @@ void AProjectileBase::SetProjectileTrajectory(FVector const& world_direction)
 void AProjectileBase::BeginPlay()
 {
 	Super::BeginPlay();
+    SpawnLocation = GetActorLocation();
     if(GetOwner())
     {
         CollisionSphere->IgnoreActorWhenMoving(GetOwner(), true);

@@ -1,5 +1,6 @@
 #include "Obstacles/DestroyableObstacle.h"
 
+#include <VanquishCharacter.h>
 #include <ProjectileBase.h>
 #include <Player/SwordAttack/SwordSlashProjectile.h>
 
@@ -41,6 +42,22 @@ ADestroyableObstacle::ADestroyableObstacle()
 void ADestroyableObstacle::BeginPlay()
 {
     Super::BeginPlay();
+    GeometryCollection->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+
+    UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(RootMesh->GetOverlayMaterial(), nullptr);
+    RootMesh->SetOverlayMaterial(MaterialInstance);
+    MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
+    // Apply to all mesh components in this actor
+    TArray<UStaticMeshComponent*> mesh_components;
+    GetComponents<UStaticMeshComponent>(mesh_components);
+    for (UActorComponent* comp : mesh_components)
+    {
+        if (UStaticMeshComponent* mesh = Cast<UStaticMeshComponent>(comp))
+        {
+            mesh->SetOverlayMaterial(MaterialInstance);
+        }
+    }
+
 }
 
 void ADestroyableObstacle::Tick(float DeltaTime)
@@ -54,10 +71,30 @@ void ADestroyableObstacle::OnMeshHit(UPrimitiveComponent* HitComp, AActor* Other
         return;
     }
 
-    if (!bHasBeenDestroyed)
+    auto* projectile = Cast<AProjectileBase>(OtherActor);
+    if (!projectile || bHasBeenDestroyed) { 
+        return;
+    }
+
+    
+    if (HeatLevelMin) {
+        auto player_pawn = Cast<AVanquishCharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
+        if (HeatLevelMin > player_pawn->GetHeatSystemLevel()) {
+            ToggleGlow(true, FLinearColor{ 0.5, 0.5, 0.5, 0.1 });
+            FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &ADestroyableObstacle::ToggleGlow, false, FLinearColor{ 0.5, 0.5, 0.5, 0.1 });
+            GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 1.f);
+            return;
+        }
+    }
+
+    ToggleGlow(true, FLinearColor{ 1,0.17,0,0.1 });
+    FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &ADestroyableObstacle::ToggleGlow, false, FLinearColor{1,0.17,0,0.1});
+    GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 1.f);
+
+    DamageToDeal -= projectile->GetProjectileDamage();
+    if (DamageToDeal <= 0.0f)
     {
         HandleDestruction(Hit.ImpactPoint);
-        UGameplayStatics::ApplyDamage(OtherActor, DamageToDeal, nullptr, this, UDamageType::StaticClass());
     }
 }
 
@@ -67,10 +104,30 @@ void ADestroyableObstacle::OnMeshOverlap(UPrimitiveComponent* OverlappedComp, AA
         return;
     }
 
-    if (!bHasBeenDestroyed)
+    auto* projectile = Cast<AProjectileBase>(OtherActor);
+    if (!projectile || bHasBeenDestroyed) {
+        return;
+    }
+
+
+    if (HeatLevelMin) {
+        auto player_pawn = Cast<AVanquishCharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
+        if (HeatLevelMin > player_pawn->GetHeatSystemLevel()) {
+            ToggleGlow(true, FLinearColor{ 1, 1.f, 1.f, 0.3 });
+            FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &ADestroyableObstacle::ToggleGlow, false, FLinearColor{ 1, 1.f, 1.f, 0.3 });
+            GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 1.f);
+            return;
+        }
+    }
+
+    ToggleGlow(true, FLinearColor{ 1,0.17,0,0.3 });
+    FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &ADestroyableObstacle::ToggleGlow, false, FLinearColor{ 1,0.17,0,0.3 });
+    GetWorldTimerManager().SetTimer(TimerHandle_TimeForHitGlow, RespawnDelegate, 1.f, false, 1.f);
+
+    DamageToDeal -= projectile->GetProjectileDamage();
+    if (DamageToDeal <= 0.0f)
     {
         HandleDestruction(SweepResult.ImpactPoint);
-        UGameplayStatics::ApplyDamage(OtherActor, DamageToDeal, nullptr, this, UDamageType::StaticClass());
     }
 }
 
@@ -93,18 +150,20 @@ void ADestroyableObstacle::HandleGeoCollectionDamage(AActor* OtherActor, const F
     // Create a radial field
     auto* radial_field = NewObject<URadialFalloff>();
     radial_field->SetRadialFalloff(
-        1000.f,
+        100.f,
         0.f,
         1.f,
         0.f,
-        100.f,
+        100.f * GetActorScale().X,
         hit_location,
         EFieldFalloffType::Field_FallOff_None
     );
 
     FieldSystem->ApplyPhysicsField(true, EFieldPhysicsType::Field_ExternalClusterStrain, nullptr, radial_field);
-
-    FVector impulse = projectile->GetVelocity().GetSafeNormal() * projectile->GetProjectileDamage() * 600000;
+    FVector impulse = projectile->GetVelocity().GetSafeNormal() * projectile->GetProjectileDamage();
+    if (projectile->GetVelocity().GetSafeNormal().IsZero()) {
+        impulse = -Hit.ImpactNormal.GetSafeNormal() * projectile->GetProjectileDamage();
+    }
     GeometryCollection->AddImpulseAtLocation(impulse, Hit.ImpactPoint);
 }
 
@@ -120,6 +179,8 @@ void ADestroyableObstacle::HandleDestruction(FVector impact_location)
     GeometryCollection->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GeometryCollection->SetNotifyRigidBodyCollision(true);
     GeometryCollection->SetGenerateOverlapEvents(true);
+
+    OnMeshDestroyed();
 
     if (DestructionEffect)
     {
@@ -150,4 +211,14 @@ void ADestroyableObstacle::OptimizePostDestruction()
         },
         DelayBeforeOptimize,
         false);
+}
+
+void ADestroyableObstacle::ToggleGlow(bool const activation, FLinearColor const color) {
+    auto const overlay_instance = Cast<UMaterialInstanceDynamic>(RootMesh->GetOverlayMaterial());
+    if (!overlay_instance) {
+        return;
+    }
+
+    overlay_instance->SetVectorParameterValue(FName{ "EmissiveColor" }, color);
+    overlay_instance->SetScalarParameterValue(FName{ "HitEffectStrength" }, activation ? 0.1f : 0.0f);
 }

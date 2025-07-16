@@ -145,6 +145,10 @@ void ASwordSlashProjectile::Tick(float DeltaTime)
         break;
     }
 
+    if (SlashTraceEffect && SlashTraceEffectComponent) {
+        SlashTraceEffectComponent->SetFloatParameter("TrailWidth", HitBoxComp->GetScaledBoxExtent().X * 2.5);
+    }
+
     life_timer += DeltaTime;
 
     if (Looping) {
@@ -230,8 +234,13 @@ void ASwordSlashProjectile::UpdateLaser() {
 void ASwordSlashProjectile::UpdateConstantSpeed(float delta_time) {
     FVector laser_origin = LaserOriginComp->GetSocketLocation(LaserOriginCompSocketName);
     auto const laser_direction = (LaserEndComp->GetComponentLocation() - lerped_position_cache).GetSafeNormal();
-
-    lerped_position_cache += laser_direction * laser_speed * delta_time;
+    if (FVector::Distance(LaserEndComp->GetComponentLocation(), lerped_position_cache) < laser_speed * delta_time) {
+        lerped_position_cache += laser_direction * FVector::Distance(LaserEndComp->GetComponentLocation(), lerped_position_cache);
+        //lerped_position_cache += laser_direction * laser_speed * delta_time;
+    }
+    else {
+       lerped_position_cache += laser_direction * laser_speed * delta_time;
+    }
 
     FVector laser_vec = lerped_position_cache - laser_origin;
     FVector laser_dir = laser_vec.GetSafeNormal();
@@ -258,11 +267,7 @@ void ASwordSlashProjectile::EndPlay(const EEndPlayReason::Type EndPlayReason) {
         }
     }
 
-    if (auto player = Cast<AVanquishCharacter>(GetOwner())) {
-        player->SetSwordSlashCurrentPos(FVector{0,0,0});
-        player->EndSwordAttack();
-
-    }
+    OnSlashDestroyed.Broadcast();
 }
 
 

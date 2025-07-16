@@ -64,9 +64,7 @@ void AEnemyBase::UpdateFollowPlayer(float delta_time) {
 
     // Optional: use forward-only distance check
     FVector center_target = player_location + player_forward * FollowDistance;
-    float distance = FVector::Dist(GetActorLocation(), center_target);
-
-    if (distance < 200.f)
+    if (CheckDistanceToGoal(center_target, 200))
     {
         GetCharacterMovement()->Velocity = FVector::ZeroVector;
         DecideNextAction();
@@ -124,6 +122,12 @@ void AEnemyBase::UpdateWaitingState(float delta_time)
 
     GetCharacterMovement()->Velocity = velocity;
 }
+
+bool AEnemyBase::CheckDistanceToGoal(FVector const goal_pos, float distance_to_goal) {
+    float distance = FVector::Dist(GetActorLocation(), goal_pos);
+    return distance < distance_to_goal;
+}
+
 
 FVector const AEnemyBase::ComputeAxisSeparatedOffsetVelocity(FVector current_location, FVector player_position, FVector player_forward, FVector2D relative_offset, float follow_distance, float forward_speed_max, float offset_speed_max) const {
     // Locked position in front of player

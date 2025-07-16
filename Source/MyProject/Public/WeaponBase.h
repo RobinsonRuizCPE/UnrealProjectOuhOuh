@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ProjectileBase.h"
+#include <Player/HeatSystemComponent.h>
+
 #include "WeaponBase.generated.h"
 
 class UCrosshairWidgetBase;
@@ -18,6 +20,7 @@ class UAudioComponent;
 class AActor;
 class UNiagaraSystem;
 class UNiagaraComponent;
+class AVanquishCharacter;
 
 UCLASS()
 class MYPROJECT_API AWeaponBase : public AActor
@@ -31,11 +34,20 @@ public:
     // Public so it can be reset for different reasons (dodge, ...)
     void ResetChargedShot();
 
+    void SetHeatSystemComponent(UHeatSystemComponent* heat_system);
+
 protected:
 
     virtual void BeginPlay() override;
 
     virtual void Tick(float DeltaTime) override;
+
+    UHeatSystemComponent* GetHeatSystem() { return HeatSystem; }
+
+    UFUNCTION(BlueprintCallable, Category = "Weapon")
+    bool IsWeaponFiring() const { return IsFiring; }
+
+    AActor* FindRootOwnerActor() const;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         float BaseDamage;
@@ -49,8 +61,25 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         float WeaponRange;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
+        float ProjectileVelocityFactorAtStart = 1.f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WeaponHeat")
+        float HeatAmount = 0.f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WeaponHeat")
+        float HeatDuration = 0.f;
+
+    bool IsFiring = false;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WeaponHeat")
+        EHeatDecayType HeatDecayType = EHeatDecayType::QuadraticEaseIn;
+
     UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         FVector TargetPoint;
+
+    UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
+        FVector TargetDirection;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Appearance")
         USkeletalMeshComponent* MeshComp;
@@ -78,8 +107,8 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
         UNiagaraSystem* MuzzleEffect;
 
-    void Fire();
-    void SpawnProjectile(TSubclassOf<AProjectileBase> projectile_class) const;
+    virtual void Fire();
+    virtual void SpawnProjectile(TSubclassOf<AProjectileBase> projectile_class) const;
     void PlayFireSound(USoundBase* sound);
     void PlayFireEffects();
 
@@ -100,16 +129,22 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
         UAnimMontage* FireAnim;
 
+    AVanquishCharacter* VanquishRootOwner;
+
 private:
     FVector2D AimDirection;
-    FVector3d TargetDirection;
+    AActor* SelectedTarget;
 
     FTimerHandle TimerHandle_TimeBetweenShots;
     float LastFireTime;
     float TimeBetweenShots;
+    float ProjectileVelocity = 0.f;
+    float ProjectileVelocitySpeedAlongSpline = 0.f;
 
     bool b_is_charged_shot_ready = true;
     FTimerHandle timer_handle_charged_shot;
+
+    UHeatSystemComponent* HeatSystem;
 
     UPROPERTY()
     UCrosshairWidgetBase* CrosshairWidget;
@@ -117,10 +152,21 @@ private:
 public:
 
     UFUNCTION(BlueprintCallable, Category = "Weapon")
-        void StartFire();
+    void StartFire();
+    virtual void StartFireImpl();
 
     UFUNCTION(BlueprintCallable, Category = "Weapon")
-        void StopFire();
+    void StartFireAtTarget(AActor* target);
+    virtual void StartFireAtTargetImpl(AActor* target);
+
+    UFUNCTION(BlueprintCallable, Category = "Weapon")
+    void StopFire();
+    virtual void StopFireImpl();
+
+    UFUNCTION(BlueprintCallable, Category = "Weapon")
+        void SetAdditionalProjectileVelocitySpeedAlongSpline(float additional_velocity) {
+        ProjectileVelocitySpeedAlongSpline = additional_velocity;
+    }
 
     UFUNCTION(BlueprintCallable, Category = "ChargedShot")
     bool IsChargedShotReady() const { return b_is_charged_shot_ready; }
@@ -128,5 +174,7 @@ public:
 private:
     void UpdateTargetPoint();
     void UpdateCrosshair();
-    AActor* FindRootOwnerActor() const;
+
+    UFUNCTION()
+    void HandleHeatLevelChanged(int32 new_heat_level, bool is_increase);
 };

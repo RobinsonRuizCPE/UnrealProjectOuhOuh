@@ -4,6 +4,7 @@
 #include "VanquishCharacter.h"
 
 #include <Player/SwordAttack/SwordSlashProjectile.h>
+#include "Niagara/Public/NiagaraFunctionLibrary.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -28,6 +29,9 @@ AVanquishCharacter::AVanquishCharacter()
 	SwordMesh->SetupAttachment(GetMesh(), TEXT("WeaponLeftHandSocket"));
 
 	PlayerFollowSplineComponent = CreateDefaultSubobject<UPlayerFollowSplineComponent>(TEXT("PlayerFollowSplineComponent"));
+
+	HeatSystem = CreateDefaultSubobject<UHeatSystemComponent>(TEXT("HeatSystem"));
+	HeatSystem->OnHeatLevelChanged.AddDynamic(this, &AVanquishCharacter::HandleHeatLevelChanged);
 }
 
 // Called when the game starts or when spawned
@@ -37,6 +41,16 @@ void AVanquishCharacter::BeginPlay()
 	UMaterialInstanceDynamic* MaterialInstance = UMaterialInstanceDynamic::Create(GetMesh()->GetOverlayMaterial(), nullptr);
 	GetMesh()->SetOverlayMaterial(MaterialInstance);
 	MaterialInstance->SetScalarParameterValue(FName{ "HitEffectStrength" }, 0.0);
+
+	TArray<AActor*> attached_actors;
+	GetAttachedActors(attached_actors);
+
+	for (AActor* actor : attached_actors) {
+		if (AWeaponBase* weapon = Cast<AWeaponBase>(actor)) {
+			weapon->SetHeatSystemComponent(HeatSystem);
+			Weapons.Add(weapon);
+		}
+	}
 }
 
 // Called every frame
@@ -53,27 +67,12 @@ void AVanquishCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 void AVanquishCharacter::TriggerSwordAttack()
 {
-	if (b_is_attacking)
-	{
-		// Buffer input
-		b_attack_buffered = true;
+	if (!HasAbilityFlag(ECharacterAbilityFlags::CanMeleeAttack)) {
 		return;
 	}
 
-	b_attack_buffered = false;
-
-	// Determine next attack from current enum
-	SwordAttackType next_attack = SwordAttackNone;
-	switch (e_current_sword_attack)
-	{
-	case SwordAttackNone: next_attack = SwordAttack0; break;
-	case SwordAttack0:    next_attack = SwordAttack1; break;
-	case SwordAttack1:    next_attack = SwordAttack2; break;
-	case SwordAttack2:    next_attack = SwordAttack2; break; // stay on last attack
-	default:              next_attack = SwordAttack0; break;
-	}
-
-	StartSwordAttack(next_attack);
+	RemoveAbilityFlags({ ECharacterAbilityFlags::CanMeleeAttack, ECharacterAbilityFlags::CanShoot });
+	StartSwordAttack(SwordAttackNone);
 	if (SwordSlashProjectileHorizontalClass)
 	{
 		FVector start = GetActorLocation() + GetActorForwardVector() * 100.f;
@@ -95,22 +94,12 @@ void AVanquishCharacter::TriggerSwordAttack()
 		if (slash)
 		{
 			slash->InitializeRandomArcSlash(start, dir, 0.25f, 2000.f);
+			slash->OnSlashDestroyed.AddDynamic(this, &AVanquishCharacter::SwordSlashEnded);
 		}
 	}
 
-	// Only reset combo if not at final attack
-	if (next_attack != SwordAttack2)
-	{
-		GetWorldTimerManager().ClearTimer(combo_reset_timer_handle);
-		GetWorldTimerManager().SetTimer(combo_reset_timer_handle, this, &AVanquishCharacter::OnComboReset, combo_max_delay);
-	}
-
-	// Debug
-	if (GEngine)
-	{
-		FString debug_text = FString::Printf(TEXT("Sword Attack: %d"), static_cast<int32>(next_attack));
-		GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Green, debug_text);
-	}
+	GetWorldTimerManager().ClearTimer(combo_reset_timer_handle);
+	GetWorldTimerManager().SetTimer(combo_reset_timer_handle, this, &AVanquishCharacter::OnComboReset, combo_max_delay);
 }
 
 void AVanquishCharacter::OnComboReset()
@@ -131,13 +120,6 @@ void AVanquishCharacter::StartSwordAttack(SwordAttackType const attack_to_start)
 	e_current_sword_attack = attack_to_start;
 	if (SwordMesh) {
 		SwordMesh->SetVisibility(true);
-	}
-
-	// Debug
-	if (GEngine)
-	{
-		FString debug_text = FString::Printf(TEXT("Attack started: %d"), static_cast<int32>(attack_to_start));
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, debug_text);
 	}
 }
 
@@ -161,18 +143,15 @@ void AVanquishCharacter::EndSwordAttack()
 	}
 }
 
+void AVanquishCharacter::SwordSlashEnded() {
+	AddAbilityFlags({ ECharacterAbilityFlags::CanMeleeAttack, ECharacterAbilityFlags::CanShoot });
+	SetSwordSlashCurrentPos(FVector{ 0,0,0 });
+	EndSwordAttack();
+}
+
+
 float AVanquishCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) {
-	// If hitboxes are disabled (i.e., in dodge state)
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			-1,                     // Key (use -1 for new line every time)
-			0.1f,                   // Duration (in seconds)
-			FColor::Green,          // Color
-			TEXT("Your debug message here")
-		);
-	}
-	if (!b_is_dodging_can_move_again)
+	if (GetDodgingStatus())
 	{
 		if (!b_has_triggered_dodge_slowmo)
 		{
@@ -285,9 +264,9 @@ class UAnimMontage* AVanquishCharacter::GetCurrentMontage()
 	return nullptr;
 }
 
-void AVanquishCharacter::SetDodgingStatusCanMoveAgain(bool const new_status) {
+void AVanquishCharacter::SetDodgingStatus(bool const new_status) {
+	b_is_dodging = new_status;
 	b_has_triggered_dodge_slowmo = false;
-	b_is_dodging_can_move_again = new_status; 
 }
 
 
@@ -307,3 +286,42 @@ void AVanquishCharacter::ResetGlobalTimeDilation() {
 	TriggerDodgeSlowMoVFX(false);
 }
 
+void AVanquishCharacter::HandleHeatLevelChanged(int32 new_heat_value, bool is_increase) {
+	auto effect_to_play = is_increase ? HeatUpVFX : HeatDownVFX;
+	PlayBoneEffect(effect_to_play, "Spine", true);
+	PlayBoneEffect(effect_to_play, "LeftLeg", true);
+	PlayBoneEffect(effect_to_play, "RightLeg", true);
+	PlayBoneEffect(effect_to_play, "LeftArm", true);
+	PlayBoneEffect(effect_to_play, "RightArm", true);
+}
+
+void AVanquishCharacter::PlayBoneEffect(UNiagaraSystem* effect, FName bone_name, bool force_refresh)
+{
+	if (!effect || !GetMesh()) return;
+
+	if (ActiveBoneEffects.Contains(bone_name) && ActiveBoneEffects[bone_name] && force_refresh)
+	{
+		ActiveBoneEffects[bone_name]->Deactivate();
+		ActiveBoneEffects[bone_name]->DestroyComponent();
+		ActiveBoneEffects.Remove(bone_name);
+	}
+
+	if (!ActiveBoneEffects.Contains(bone_name))
+	{
+		UNiagaraComponent* effect_component = UNiagaraFunctionLibrary::SpawnSystemAttached(
+			effect,
+			GetMesh(),
+			bone_name,
+			FVector::ZeroVector,
+			FRotator{180,0,0},
+			EAttachLocation::SnapToTargetIncludingScale,
+			true
+		);
+
+		if (effect_component)
+		{
+			effect_component->SetAutoActivate(true);
+			ActiveBoneEffects.Add(bone_name, effect_component);
+		}
+	}
+}

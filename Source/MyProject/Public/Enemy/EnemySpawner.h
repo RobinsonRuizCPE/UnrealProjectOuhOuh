@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/SphereComponent.h"
+#include "Components/ArrowComponent.h"
 #include "../EnemyBase.h"
 #include "EnemySpawner.generated.h"
 
@@ -33,6 +34,8 @@ protected:
 private:
 	void SpawnEnemyAtLocation();
 
+	void SpawnNextEnemy();
+
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
 		TSubclassOf<AEnemyBase> EnemyType;
@@ -44,7 +47,17 @@ protected:
 		float CollisionRadius = 500.0f;
 
 	/** World-space markers for laser path */
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Spawn")
-		USceneComponent* SpawnLocation;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
+	TArray<UArrowComponent*> SpawnLocation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
+	bool InfiniteSpawn = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn")
+	float SpawnDelay = 0.0f;
+
+private:
+	int32 current_spawn_index = 0;
+	FTimerHandle spawn_timer_handle;
 
 };
